@@ -2,7 +2,7 @@ import pefile
 
 
 def GetFileVersion(filename: str) -> str:
-    pe = pefile.PE(filename, fast_load=True)
+    pe = pefile.PE(filename)
     try:
         if not getattr(pe, "VS_FIXEDFILEINFO", None):
             raise ValueError("No fixed file version information found")
