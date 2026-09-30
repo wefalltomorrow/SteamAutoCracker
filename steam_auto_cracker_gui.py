@@ -1,9 +1,14 @@
 import traceback
 
 try: # Handles Python errors to write them to a log file so they can be reported and fixed more easily.
-    import tkinter as tk
+    ## Replaced by 'ttkbootstrap' for [easier] themes
+    #import tkinter as tk
     from tkinter import ttk, filedialog, font
     from tkinterdnd2 import DND_FILES, TkinterDnD
+
+    ## Used for theming/coloring configuration for the UI
+    import ttkbootstrap
+    import ttkbootstrap as tk
 
     import requests
     import configparser
@@ -14,6 +19,11 @@ try: # Handles Python errors to write them to a log file so they can be reported
     import shutil
     from time import sleep
     from sys import exit
+    import sys
+    import re
+    import webbrowser
+    from difflib import SequenceMatcher
+    import typing
 
     VERSION = "2.2.2"
 
@@ -31,13 +41,36 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     EXTS_TO_REPLACE = (".txt", ".ini", ".cfg")
 
-    GITHUB_LATESTVERSIONJSON = "https://raw.githubusercontent.com/BigBoiCJ/SteamAutoCracker/autoupdater/latestversion.json"
-    GITHUB_AUTOUPDATER = "https://raw.githubusercontent.com/BigBoiCJ/SteamAutoCracker/autoupdater/steam_auto_cracker_gui_autoupdater.exe"
+    GITHUB_RAWHOST = "raw.githubusercontent.com"
+    GITHUB_APIHOST = "api.github.com"
+    GITHUB_ACCREPOSTR = "BigBoiCJ/SteamAutoCracker"
+    GITHUB_ALLRELEASESJSON = f"https://{GITHUB_APIHOST}/repos/{GITHUB_ACCREPOSTR}/releases"
+    GITHUB_LATESTRELEASESJSON = f"{GITHUB_ALLRELEASESJSON}/latest"
+    GITHUB_LATESTVERSIONJSON = f"https://{GITHUB_RAWHOST}/{GITHUB_ACCREPOSTR}/autoupdater/latestversion.json"
+    GITHUB_AUTOUPDATER = f"https://{GITHUB_RAWHOST}/{GITHUB_ACCREPOSTR}/autoupdater/steam_auto_cracker_gui_autoupdater.exe"
+
+    def get_app_dir():
+        """Directory for writable user files such as config and logs."""
+        if getattr(sys, "frozen", False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def get_resource_path(relative_path):
+        """Resolve bundled read-only resources in source and PyInstaller builds."""
+        base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_path, relative_path)
+
+    def get_user_path(filename):
+        return os.path.join(get_app_dir(), filename)
+
+    def version_key(value):
+        parts = [int(part) for part in re.findall(r"\d+", str(value or ""))]
+        return tuple((parts + [0, 0, 0])[:3])
 
     def OnTkinterError(exc, val, tb):
         # Handle Tkinter Python errors
         print("\n[!!!] A Tkinter Python error occurred! Writing the error to the error_tkinter.log file.\n---")
-        with open("error_tkinter.log", "w", encoding="utf-8") as errorFile:
+        with open(get_user_path("error_tkinter.log"), "w", encoding="utf-8") as errorFile:
             errorFile.write(f"SteamAutoCracker GUI v{VERSION}\n---\nA Tkinter Python error occurred!\nPlease report it on GitHub or cs.rin.ru\nMake sure to blank any personal detail.\nNOTE: '_tkinter.TclError: invalid command name' errors are normal if you closed the window while SAC was busy. In that case, you should not report the issue and just ignore it.\n---\n\n")
             traceback.print_exc(file=errorFile)
         traceback.print_exc()
@@ -49,29 +82,48 @@ try: # Handles Python errors to write them to a log file so they can be reported
             pass
 
     class SACRequest:
-        def __init__(self, url:str, name:str = "Unnamed"):
+        def __init__(self, url: str, name: str = "Unnamed", params: dict = None):
             self.url = url
+            self.params = params
             self.tries = 0
             self.name = name
             self.DoRequest()
 
         def DoRequest(self):
-            self.tries += 1
-            req = requests.get(self.url, timeout=10)
-            if not req.ok:
-                if self.tries < int(config["Advanced"]["RetryMax"]):
-                    # Do another try
-                    update_logs("- " + self.name + " request failed, retrying in " + config["Advanced"]["RetryDelay"] + "s... (" + str(self.tries) + "/" + config["Advanced"]["RetryMax"] + " tries)")
-                    root.update()
-                    sleep(int(config["Advanced"]["RetryDelay"]))
-                    self.DoRequest()
-                else:
-                    update_logs("[!] Connection failed after " + config["Advanced"]["RetryMax"] + " tries. Are you connected to the Internet? Is Steam online?\nIf you being rate limited (too many DLCs), you should try increasing retrydelay and retrymax in the config")
-                    raise Exception(f"SACRequest: Connection failed after {config['Advanced']['RetryMax']} tries")
-            else:
-                self.req = req
+            max_tries = int(config["Advanced"]["RetryMax"])
+            retry_delay = int(config["Advanced"]["RetryDelay"])
+            last_error = None
 
-    def handle_folder_selection(event=None):
+            for attempt in range(1, max_tries + 1):
+                self.tries = attempt
+                try:
+                    req = requests.get(self.url, params=self.params, timeout=10)
+                    req.raise_for_status()
+                    self.req = req
+                    return
+                except requests.RequestException as exc:
+                    last_error = exc
+                    if attempt >= max_tries:
+                        break
+
+                    update_logs(
+                        "- " + self.name + " request failed, retrying in "
+                        + str(retry_delay) + "s... ("
+                        + str(attempt) + "/" + str(max_tries) + " tries)"
+                    )
+                    root.update()
+                    sleep(retry_delay)
+
+            update_logs(
+                "[!] Connection failed after " + str(max_tries)
+                + " tries. Are you connected to the Internet? Is Steam online?\n"
+                + "If you are being rate limited, try increasing RetryDelay and RetryMax."
+            )
+            raise Exception(
+                f"SACRequest: {self.name} failed after {max_tries} tries"
+            ) from last_error
+
+    def handle_folder_selection    def handle_folder_selection(event=None):
         global folder_path
         global last_selected_folder
         last_selected_folder = config["Preferences"].get("last_selected_folder", "")
@@ -90,6 +142,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
             if last_selected_folder != "" and os.path.isdir(last_selected_folder):
                 initial_dir = last_selected_folder
             folder_path_temp = filedialog.askdirectory(initialdir=initial_dir) # Returns the directory with no "/" at the end
+            if isinstance(folder_path_temp, tuple):
+                folder_path_temp = folder_path_temp[0] if folder_path_temp else ""
 
         if os.path.isdir(folder_path_temp):
             folder_path = folder_path_temp
@@ -171,48 +225,71 @@ try: # Handles Python errors to write them to a log file so they can be reported
             searchGameButton.config(state=tk.NORMAL) # Re-enable the ability to search the game
             selectFolderButton.config(state=tk.NORMAL) # Re-enable the ability to change the selected folder
 
+    def _normalize_game_name(value):
+        return re.sub(r"[^a-z0-9]+", " ", str(value or "").casefold()).strip()
+
+    def _game_name_score(target, candidate):
+        target_norm = _normalize_game_name(target)
+        candidate_norm = _normalize_game_name(candidate)
+        if not target_norm or not candidate_norm:
+            return 0.0
+        if target_norm == candidate_norm:
+            return 1.0
+
+        score = SequenceMatcher(None, target_norm, candidate_norm).ratio()
+        if target_norm in candidate_norm or candidate_norm in target_norm:
+            score = max(score, 0.80)
+        return score
+
     def FindInAppList(appName):
-        update_logs("\nImporting and searching the App List, this could take a few seconds if your computer isn't powerful enough.")
-        gameFoundStatus.config(text=f"Searching in the App List...")
-        root.update() # Update the window now
+        update_logs("\nSearching the live Steam Store index...")
+        gameFoundStatus.config(text="Searching Steam Store...")
+        root.update()
+
         try:
-            with open("applist.txt", "r", encoding="utf-8") as file:
-                data = json.load(file)
-        except:
-            update_logs("The App List isn't downloaded on your computer, downloading it...")
-            UpdateAppList()
-            return FindInAppList(appName) # Re launch this funtion
+            req = SACRequest(
+                "https://store.steampowered.com/api/storesearch/",
+                "SearchGame",
+                params={"term": appName, "cc": "US", "l": "english"},
+            ).req
+            data = req.json()
+        except Exception as exc:
+            update_logs(f"[!] Steam Store search failed: {exc}")
+            gameFoundStatus.config(text="Search failed")
+            return 0
 
-        for elem in data["applist"]["apps"]:
-            if elem["name"].lower() != appName.lower():
-                continue
+        items = data.get("items", []) if isinstance(data, dict) else []
+        candidates = [
+            item for item in items
+            if isinstance(item, dict) and item.get("id") is not None and item.get("name")
+        ]
 
-            return elem["appid"]
+        if not candidates:
+            update_logs("[!] The app was not found. Try the exact Steam name or enter the AppID.")
+            gameFoundStatus.config(text="App not found!")
+            updateAppListButton.grid(row=0, column=2, padx=(10, 0))
+            return 0
 
-        update_logs("[!] The App was not found, make sure you entered EXACTLY the Steam Game's name (watch it on Steam)")
-        update_logs("If you typed it properly, you can try to update the App List. Alternatively, you can try entering the AppID.")
-        gameFoundStatus.config(text=f"App not found!")
+        best = max(candidates, key=lambda item: _game_name_score(appName, item["name"]))
+        best_score = _game_name_score(appName, best["name"])
 
-        updateAppListButton.grid(row=0, column=2, padx=(10, 0))
-        return 0
+        if best_score < 0.45:
+            update_logs("[!] No sufficiently close Steam Store match was found. Try entering the AppID.")
+            gameFoundStatus.config(text="App not found!")
+            updateAppListButton.grid(row=0, column=2, padx=(10, 0))
+            return 0
+
+        update_logs(f'- Matched "{appName}" to "{best["name"]}" (AppID: {best["id"]})')
+        return int(best["id"])
 
     def UpdateAppList():
         updateAppListButton.grid_forget()
-        update_logs("\nUpdating the App List, this could take a few seconds to up to a minute, depending on your internet connection.")
-        gameFoundStatus.config(text=f"Updating the App List...")
-        root.update()
-        try:
-            req = SACRequest("https://api.steampowered.com/ISteamApps/GetAppList/v2/", "UpdateAppList").req
-        except Exception:
-            gameFoundStatus.config(text=f"An error has occurred")
-            return
+        update_logs(
+            "\nSAC now searches the live Steam Store index, so there is no local App List to update."
+        )
+        gameFoundStatus.config(text="Using live Steam Store search")
 
-        with open("applist.txt", "w", encoding="utf-8") as file:
-            file.write(req.text)
-        update_logs("App List updated!")
-        gameFoundStatus.config(text=f"App List updated!")
-
-    def RetrieveAppName(appID: int) -> str:
+    def RetrieveAppName    def RetrieveAppName(appID: int) -> str:
         try:
             req = SACRequest("https://store.steampowered.com/api/appdetails?appids=" + str(appID) + "&filters=basic", "RetrieveAppName").req
         except Exception:
@@ -370,9 +447,9 @@ try: # Handles Python errors to write them to a log file so they can be reported
             EndCrack()
             return
 
-        configDir = os.path.join(os.getcwd(), "sac_emu\\" + config["Crack"]["SelectedCrack"]) # "sac_emu/game_ali213" for example
+        configDir = get_resource_path(os.path.join("sac_emu", config["Crack"]["SelectedCrack"])) # "sac_emu/game_ali213" for example
         try:
-            config.read(configDir + "\\config_override.ini")
+            config.read(os.path.join(configDir, "config_override.ini"))
         except Exception:
             pass
 
@@ -402,7 +479,13 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     #update_logs("\n[[[ Steamless logs ]]]")
                     fileLocation = root_dir + "/" + fileName
                     shutil.move(fileLocation, fileName) # Move the file to our location
-                    subprocess.call("Steamless_CLI\\Steamless.CLI.exe " + steamlessOptions + "\"" + fileName + "\"", shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE) # Run Steamless on the game
+                    steamless_path = get_resource_path(os.path.join("Steamless_CLI", "Steamless.CLI.exe"))
+                    if os.name != "nt":
+                        update_logs("- Steamless is Windows-only; skipping this executable on the current platform.")
+                        shutil.move(fileName, fileLocation)
+                        root.update()
+                        continue
+                    subprocess.call(f'"{steamless_path}" {steamlessOptions}"{fileName}"', shell=True, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
                     #update_logs("[[[ -------------- ]]]\n")
 
                     # Check if the game was NOT unpacked
@@ -551,6 +634,30 @@ try: # Handles Python errors to write them to a log file so they can be reported
         selectCrackButton.config(state=tk.NORMAL)
         crackGameButton.config(state=tk.NORMAL)
 
+
+    # Theming
+    AllThemes: dict[str, dict[str, typing.Any]] = ttkbootstrap.themes.standard.STANDARD_THEMES
+    ThemeFilter = ('cosmo', 'darkly', 'cyborg')
+    ThemeAliases = ('light', 'dark', 'black')
+    ThemesSubset = dict([t for t in AllThemes.items() if t[0] in ThemeFilter])
+    def GetThemes() -> dict[str, dict[str, typing.Any]]:
+        return ThemesSubset
+    
+    # Changes appearance according to the theme in the config
+    def ApplyStyle() -> None:
+        global style
+        
+        if (config["Preferences"]["ThemeOption"] in tuple(GetThemes().keys())):
+            ##print(config["Preferences"]["ThemeOption"])
+            style.theme_use(config["Preferences"]["ThemeOption"])
+            
+            style.configure("TFrame", padding=0)
+            style.configure("TLabel", padding=6)
+            style.configure("TRadiobutton", padding=6)
+            style.configure("TButton", padding=10)
+            style.configure("TEntry", padding=6)
+            style.configure("TEntry", padding=0)
+
     # ----- Settings -----
 
     def SettingsButton():
@@ -587,6 +694,27 @@ try: # Handles Python errors to write them to a log file so they can be reported
         scrollFrame.bind("<Configure>", configure_canvas)
         # Finished handling scrolling
 
+        # Theme options (ThemeOption)
+        ttk.Label(scrollFrame, text="Theme:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
+        settings_frame_theme = ttk.Frame(scrollFrame)
+        settings_frame_theme.pack(padx=(15, 0), pady=(0, 0), anchor="w")
+
+        # Radios
+        global ThemeOption_var
+        ThemeOption_var = tk.StringVar()
+        ThemeOption_var.set(config["Preferences"]["ThemeOption"])
+
+        # Display subset of themes that correspond to the
+        # typical 'light', 'dark', and 'black' theme options
+        themeRow = 0
+        for themeIdx, themeKey in enumerate(tuple(GetThemes().keys())):
+            ttk.Radiobutton(
+                settings_frame_theme, text=f"{themeKey} ({ThemeAliases[themeIdx]})", variable=ThemeOption_var,
+                value=themeKey, command=lambda: UpdateConfAndUI("Preferences", "ThemeOption", ThemeOption_var.get())
+            ).grid(padx=(4, 4), pady=(2,2), row=themeRow, column=0, sticky="w")
+            ##print(f"{themeRow} {themeCol}")
+            themeRow += 1
+        
         # Update options (UpdateOption)
         ttk.Label(scrollFrame, text="Updates:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
         ttk.Label(scrollFrame, text="This will search the latest version on GitHub.\nIf you're afraid of leaking your IP to GitHub, use a VPN and/or disable auto updating.", font=FONT4, padding=0, foreground="#575757", wraplength=600).pack(padx=(6, 0), pady=(0,0), anchor="w")
@@ -695,6 +823,10 @@ try: # Handles Python errors to write them to a log file so they can be reported
         advBypassGameVerification = ttk.Checkbutton(scrollFrame, text="Bypass the game verification, allows to crack AppIDs not recognized as games", variable=BypassGameVerification_var, command=lambda: UpdateAdvanced("BypassGameVerification", BypassGameVerification_var))
         advBypassGameVerification.pack(padx=(15, 0), pady=(0, 10), anchor="w")
 
+        # Place at same pos as root window, with the same size
+        # instead of default position (which sometimes is on the other monitor)
+        top.geometry(f"{root.winfo_width()}x{root.winfo_height()}+{root.winfo_x()}+{root.winfo_y()}")
+
         top.grab_set() # Catches all interactions, prevents the user from interacting with the root window
 
     def UpdateFileName(key, strVar):
@@ -793,8 +925,13 @@ try: # Handles Python errors to write them to a log file so they can be reported
     # ---------------------------------------
 
     def UpdateConfig():
-        with open("config.ini", "w", encoding="utf-8") as configFile:
+        with open(get_user_path("config.ini"), "w", encoding="utf-8") as configFile:
             config.write(configFile)
+
+    def UpdateConfAndUI(section: str, key: str, value: str):
+        UpdateConfigKey(section, key, value)
+        # Reapply with new selection
+        ApplyStyle()
 
     def UpdateConfigKey(section: str, key: str, value: str):
         config[section][key] = value
@@ -813,6 +950,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         if resetLevel == 0 or resetLevel == 1:
             currentConfig["Preferences"] = {}
+            currentConfig["Preferences"]["ThemeOption"] = list(GetThemes().keys())[0]
             currentConfig["Preferences"]["UpdateOption"] = "0"
             currentConfig["Preferences"]["CrackOption"] = "0"
             currentConfig["Preferences"]["Steamless"] = "1"
@@ -852,7 +990,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         global config
         config = configparser.ConfigParser()
 
-        if config.read("config.ini") == []:
+        if config.read(get_user_path("config.ini")) == []:
             # Config doesn't exist, create it
             ResetConfig()
         else:
@@ -874,22 +1012,29 @@ try: # Handles Python errors to write them to a log file so they can be reported
         updatesButton.config(text="Searching for updates...", state=tk.DISABLED)
         root.update()
 
-        req = SACRequest(GITHUB_LATESTVERSIONJSON, "RetrieveLatestVersionJson").req
-        data = req.json()
-        global latestversion
-        latestversion = data["version"]
-        if latestversion == VERSION: # The latest stable version is the one we're running
-            updatesButton.config(text="SAC is up to date!", state=tk.NORMAL)
+        try:
+            req = SACRequest(GITHUB_LATESTVERSIONJSON, "RetrieveLatestVersionJson").req
+            data = req.json()
+            latest = data["version"]
+        except Exception as exc:
+            updatesButton.config(text="Update check failed", state=tk.NORMAL)
+            update_logs(f"\n[!] Update check failed: {exc}")
             return
 
+        global latestversion
         global release_link
-        release_link = data["release"]
+        latestversion = latest
+        release_link = data.get("release", "https://github.com/BigBoiCJ/SteamAutoCracker/releases")
         release_link = release_link.replace("[VERSION]", latestversion)
 
-        updatesButton.config(text="SAC is outdated!", state=tk.NORMAL)
+        if version_key(latestversion) <= version_key(VERSION):
+            updatesButton.config(text="SAC fork is up to date!", state=tk.NORMAL)
+            return
+
+        updatesButton.config(text="New upstream release available", state=tk.NORMAL)
         DisplayUpdate()
 
-    def DisplayUpdate():
+    def DisplayUpdate    def DisplayUpdate():
         top = tk.Toplevel(root)
         top.title(f"SteamAutoCracker GUI v{VERSION} - Update")
         top.resizable(False, False) # Prevents resizing the window's width and height
@@ -904,7 +1049,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         updateDisplayButtonsFrame.pack(pady=(5,20))
 
         global updateDisplayButtonUpdate
-        updateDisplayButtonUpdate = ttk.Button(updateDisplayButtonsFrame, text="Update now", command=UpdateSAC, padding=3)
+        updateDisplayButtonUpdate = ttk.Button(updateDisplayButtonsFrame, text="Open upstream release", command=UpdateSAC, padding=3)
         updateDisplayButtonUpdate.grid(row=0, column=0)
 
         global updateDisplayButtonCopy
@@ -924,47 +1069,15 @@ try: # Handles Python errors to write them to a log file so they can be reported
         updateDisplayTop = top
 
     def UpdateSAC():
-        updateDisplayButtonUpdate.config(state=tk.DISABLED)
-        updateDisplayButtonCopy.config(state=tk.DISABLED)
-        updateDisplayButtonClose.config(state=tk.DISABLED)
-
         updateDisplayStatusLabel.pack(pady=(0,20), anchor="center")
-        updateDisplayStatusLabel.config(text="Downloading the autoupdater, please wait...\nThis might take some time depending on your internet connection speed...")
+        updateDisplayStatusLabel.config(
+            text="Opening the upstream release page in your browser.\n"
+                 "Automatic replacement is disabled in this fork so fork-specific changes are preserved."
+        )
         root.update()
+        webbrowser.open(release_link)
 
-        # Check for the existence of a leftover autoupdater
-        if os.path.isfile("steam_auto_cracker_gui_autoupdater.exe"):
-            try:
-                os.remove("steam_auto_cracker_gui_autoupdater.exe")
-            except Exception: # In case the file is locked for example
-                updateDisplayButtonUpdate.config(state=tk.NORMAL)
-                updateDisplayButtonCopy.config(state=tk.NORMAL)
-                updateDisplayButtonClose.config(state=tk.NORMAL)
-                updateDisplayStatusLabel.config(text="An error occurred. The autoupdater (steam_auto_cracker_gui_autoupdater.exe) already exists.\nSAC couldn't delete the autoupdater. Please try to remove it yourself, or try again.")
-                root.update()
-                return
-            print("Removed leftover autoupdater")
-
-        # Override RetryDelay and RetryMax
-        config["Advanced"]["RetryDelay"] = "3"
-        config["Advanced"]["RetryMax"] = "5"
-
-        req = SACRequest(GITHUB_AUTOUPDATER, "DownloadAutoupdater").req
-
-        updateDisplayStatusLabel.config(text="Writing the autoupdater, please wait...")
-        root.update()
-
-        with open("steam_auto_cracker_gui_autoupdater.exe", mode="wb") as file:
-            file.write(req.content)
-
-        updateDisplayStatusLabel.config(text="Autoupdater installed!\nStarting it in 3 seconds...")
-        root.update()
-
-        sleep(3)
-        subprocess.Popen("steam_auto_cracker_gui_autoupdater.exe") # Open SAC GUI Autoupdater
-        exit()
-
-    def CopyReleaseURL():
+    def CopyReleaseURL    def CopyReleaseURL():
         root.clipboard_clear()
         root.clipboard_append(release_link)
 
@@ -973,7 +1086,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     # Let's now create the main window
     root = TkinterDnD.Tk()
-    root.resizable(False, False) # Prevents resizing the window's width and height
+    root.resizable(True, True) # Allow the best-of fork UI to adapt to smaller/larger displays
+    root.minsize(800, 600)
     root.title(f"SteamAutoCracker GUI v{VERSION}")
     root.drop_target_register(DND_FILES) # Register the drop target
     root.dnd_bind("<<Drop>>", lambda event: handle_folder_selection(event=event)) # Bind the drop target
@@ -989,12 +1103,9 @@ try: # Handles Python errors to write them to a log file so they can be reported
     FONT_APP_ENTRY.config(size=10)
 
     # Style ttk
-    style = ttk.Style()
-    style.configure("TFrame", padding=0)
-    style.configure("TLabel", padding=6)
-    style.configure("TRadiobutton", padding=6)
-    style.configure("TButton", padding=10)
-    style.configure("TText", padding=6)
+    style: ttkbootstrap.Style = ttkbootstrap.Style(theme=config["Preferences"]["ThemeOption"])
+    
+    ApplyStyle()
 
     ttk.Label(root, text=f"SteamAutoCracker GUI v{VERSION}", font=FONT2, padding=0).pack(pady=(10, 0), anchor="center")
     ttk.Label(root, text="by BigBoiCJ", padding=0).pack(pady=(0, 0), anchor="center")
@@ -1068,11 +1179,24 @@ try: # Handles Python errors to write them to a log file so they can be reported
     # Spacer
     #tk.Label(root, text="").pack()
 
-    # Logs scroll text widget
-    logs_text = tk.Text(root, height=15, width=100)
-    logs_text.pack(pady=10, padx=10)
+    # Logs text widget with a vertical scrollbar; keep a monospaced font.
+    logs_frame = ttk.Frame(root)
+    logs_frame.pack(pady=5, padx=10, fill=tk.BOTH, expand=True)
 
-    text = f"SteamAutoCracker GUI v{VERSION} by BigBoiCJ"
+    logs_scrollbar = ttk.Scrollbar(logs_frame)
+    logs_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    logs_text = tk.Text(
+        logs_frame,
+        height=12,
+        width=90,
+        font="TkFixedFont",
+        yscrollcommand=logs_scrollbar.set,
+    )
+    logs_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    logs_scrollbar.config(command=logs_text.yview)
+
+    text = f"SteamAutoCracker GUI v{VERSION} by BigBoiCJ"    text = f"SteamAutoCracker GUI v{VERSION} by BigBoiCJ"
     buf = ""
     for i in range(len(text)):
         buf += "-"
@@ -1083,16 +1207,11 @@ try: # Handles Python errors to write them to a log file so they can be reported
     # Handle errors to log them while tkinter is running
     root.report_callback_exception = OnTkinterError
 
-    # Check for the existence of a leftover autoupdater
-    if os.path.isfile("steam_auto_cracker_gui_autoupdater.exe"):
-        try:
-            os.remove("steam_auto_cracker_gui_autoupdater.exe")
-        except Exception: # In case the file is locked for example
-            pass
-
     # Check for updates
     if config["Preferences"]["UpdateOption"] == "1":
         CheckUpdates()
+
+    ##root.geometry("636x555")
 
     # Start main loop
     root.mainloop()
@@ -1100,7 +1219,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 except Exception:
     # Handle Python errors
     print("\n[!!!] A Python error occurred! Writing the error to the error.log file.\n---")
-    with open("error.log", "w", encoding="utf-8") as errorFile:
+    with open(get_user_path("error.log"), "w", encoding="utf-8") as errorFile:
         errorFile.write(f"SteamAutoCracker GUI v{VERSION}\n---\nA Python error occurred!\nPlease report it on GitHub or cs.rin.ru\nMake sure to blank any personal detail.\n---\n\n")
         traceback.print_exc(file=errorFile)
     traceback.print_exc()

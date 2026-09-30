@@ -1,4 +1,22 @@
 # SteamAutoCracker
+
+## wefalltomorrow best-of fork
+
+This fork keeps the upstream 2.2.2 codebase and selectively integrates maintained improvements from the SteamAutoCracker fork/PR ecosystem rather than merging every divergent fork wholesale.
+
+Included here:
+- Light, Dark and Black UI themes plus the monospaced log fix from Sir-Kam's theme work.
+- Live Steam Store game-name lookup, replacing the obsolete local/GetAppList dependency.
+- `pefile`-based PE version detection, avoiding the old `win32api` dependency.
+- PyInstaller-aware resource/user-data paths and safer Steamless path handling.
+- A resizable UI with an expandable, scrollable log pane.
+- Fork-safe update checks: newer upstream releases open in the browser instead of silently replacing this fork.
+- A small Windows CI workflow that verifies supported Python sources compile and the PE helper imports.
+
+Not copied verbatim:
+- The broken boilerplate Conda workflow and placeholder SECURITY.md from codingforfun5435.
+- sign-river's Chinese-first defaults, remote DLC server manager, and other unrelated/invasive changes.
+- Experimental RUNE binary-patching changes from PR #112; that PR still contains code paths that need more review before they are appropriate for a stability-focused merge.
 ![GitHub all releases](https://img.shields.io/github/downloads/BigBoiCJ/SteamAutoCracker/total?color=brightgreen&label=Total%20downloads)
 ![GitHub release (latest by date)](https://img.shields.io/github/downloads/BigBoiCJ/SteamAutoCracker/latest/total?color=green&label=Latest%20version%20downloads)
 ![GitHub Repo stars](https://img.shields.io/github/stars/BigBoiCJ/SteamAutoCracker?color=yellow&label=Stars)
@@ -46,10 +64,10 @@ Screenshots from v2.0.0
   - 64 bits Windows
 - If you use the python file (source):
   - The `requests` module. Install with `py -m pip install requests` or `python -m pip install requests` or `python3 -m pip install requests`
-  - The `pywin32` module (which contains win32api). Install with `py -m pip install pywin32` or `python -m pip install pywin32` or `python3 -m pip install pywin32`
-    - If you have any problem, please check https://pypi.org/project/pywin32/
+  - The `pefile` module, used to read executable/DLL version information without requiring pywin32. Install with `py -m pip install pefile` or `python -m pip install pefile`
   - The `tkinter` module, but it should be included in Python by default.
   - As of v2.2.0 GUI, the `tkinterdnd2` module is required as well (v0.4.0+). Install it with `py -m pip install tkinterdnd2`. ([pypi link](https://pypi.org/project/tkinterdnd2/) - [github link](https://github.com/Eliav2/tkinterdnd2))
+  - This fork also uses `ttkbootstrap` for Light/Dark/Black themes. Install with `py -m pip install ttkbootstrap`.
   - I believe Python 3.7+ is needed.
 
 ## Notes about DLCs
