@@ -60,6 +60,7 @@ jobs:
             --add-data "icon_hashtag.ico;." `
             --collect-all tkinterdnd2 `
             --collect-all ttkbootstrap `
+            --runtime-hook ".github/runtime_hooks/ttkbootstrap_tk_constants.py" `
             steam_auto_cracker_gui.py
 
           if (-not (Test-Path "dist\steam_auto_cracker_gui.exe")) {
