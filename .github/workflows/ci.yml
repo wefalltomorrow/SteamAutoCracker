@@ -31,3 +31,6 @@ jobs:
 
       - name: Exercise portable PE version helper
         run: python -c "import os; from sac_lib.get_file_version import GetFileVersion; print(GetFileVersion(os.path.join(os.environ['WINDIR'], 'System32', 'kernel32.dll')))"
+
+      - name: Regression test Steam AppDetails issue 124
+        run: python -c "from sac_lib.steam_store import extract_appdetails_entry; assert extract_appdetails_entry({}, 1894430) is None; assert extract_appdetails_entry({'1894430': {'success': True, 'data': {'name': 'Test'}}}, 1894430)['success'] is True; assert extract_appdetails_entry({'success': False}, 1894430)['success'] is False; print('issue #124 parser regression OK')"
