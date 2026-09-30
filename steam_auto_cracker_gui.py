@@ -17,6 +17,10 @@ try: # Handles Python errors to write them to a log file so they can be reported
     import json
     import subprocess
     from sac_lib.get_file_version import GetFileVersion
+    from sac_lib.steam_store import (
+        describe_appdetails_problem,
+        extract_appdetails_entry,
+    )
     import shutil
     from time import sleep
     from sys import exit
@@ -40,6 +44,12 @@ try: # Handles Python errors to write them to a log file so they can be reported
     STATE_UpdatingAppList = False
 
     EXTS_TO_REPLACE = (".txt", ".ini", ".cfg")
+
+    DEFAULT_REQUEST_HEADERS = {
+        "User-Agent": f"SteamAutoCracker/{VERSION} (+https://github.com/wefalltomorrow/SteamAutoCracker)",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
 
     GITHUB_RAWHOST = "raw.githubusercontent.com"
     GITHUB_APIHOST = "api.github.com"
@@ -82,9 +92,10 @@ try: # Handles Python errors to write them to a log file so they can be reported
             pass
 
     class SACRequest:
-        def __init__(self, url: str, name: str = "Unnamed", params: dict = None):
+        def __init__(self, url: str, name: str = "Unnamed", params: dict = None, headers: dict = None):
             self.url = url
             self.params = params
+            self.headers = headers or DEFAULT_REQUEST_HEADERS
             self.tries = 0
             self.name = name
             self.DoRequest()
@@ -97,7 +108,12 @@ try: # Handles Python errors to write them to a log file so they can be reported
             for attempt in range(1, max_tries + 1):
                 self.tries = attempt
                 try:
-                    req = requests.get(self.url, params=self.params, timeout=10)
+                    req = requests.get(
+                        self.url,
+                        params=self.params,
+                        headers=self.headers,
+                        timeout=10,
+                    )
                     req.raise_for_status()
                     self.req = req
                     return
@@ -290,17 +306,79 @@ try: # Handles Python errors to write them to a log file so they can be reported
         )
         gameFoundStatus.config(text="Using live Steam Store search")
 
+    def RetrieveAppDetails(appID: int, request_name: str, verbose: bool = False):
+        """
+        Retrieve one Steam Store AppDetails entry safely.
+
+        Steam occasionally returns valid JSON that does not contain the requested
+        AppID key. The old code indexed that key directly and crashed with
+        KeyError (upstream issue #124). Try the small 'basic' response first,
+        then retry once without the filter before failing gracefully.
+        """
+        app_id = str(appID)
+        request_variants = [
+            {"appids": app_id, "filters": "basic", "l": "english", "cc": "US"},
+            {"appids": app_id, "l": "english", "cc": "US"},
+        ]
+
+        last_problem = "unknown response"
+
+        for attempt_index, params in enumerate(request_variants):
+            request_label = request_name
+            if attempt_index > 0:
+                request_label += "Fallback"
+
+            try:
+                req = SACRequest(
+                    "https://store.steampowered.com/api/appdetails",
+                    request_label,
+                    params=params,
+                ).req
+            except Exception as exc:
+                last_problem = f"request failed: {exc}"
+                break
+
+            try:
+                payload = req.json()
+            except ValueError as exc:
+                last_problem = f"invalid JSON: {exc}"
+                payload = None
+
+            entry = extract_appdetails_entry(payload, app_id)
+            if entry is not None:
+                return entry
+
+            if payload is not None:
+                last_problem = describe_appdetails_problem(payload, app_id)
+
+            if attempt_index == 0 and verbose:
+                update_logs(
+                    f"\n[!] Steam AppDetails did not return AppID {app_id}; "
+                    "retrying once without the basic filter..."
+                )
+                root.update()
+
+        if verbose:
+            update_logs(
+                f"\n[!] Steam AppDetails failed for AppID {app_id}: {last_problem}"
+            )
+
+        return None
+
     def RetrieveAppName(appID: int) -> str:
-        try:
-            req = SACRequest("https://store.steampowered.com/api/appdetails?appids=" + str(appID) + "&filters=basic", "RetrieveAppName").req
-        except Exception:
+        entry = RetrieveAppDetails(appID, "RetrieveAppName")
+        if not entry or not entry.get("success"):
             return "error"
 
-        data = req.json()
-        data = data[str(appID)]
-        if (not "data" in data) or (not "name" in data["data"]):
+        app_data = entry.get("data")
+        if not isinstance(app_data, dict):
             return "error"
-        return data["data"]["name"]
+
+        name = app_data.get("name")
+        if not name:
+            return "error"
+
+        return name
 
     def RetrieveGame() -> bool:
         global appID
@@ -315,26 +393,37 @@ try: # Handles Python errors to write them to a log file so they can be reported
         gameFoundStatus.config(text=f"[1/2] Retrieving game informations from Steam...")
         root.update()
         # https://wiki.teamfortress.com/wiki/User:RJackson/StorefrontAPI#appdetails
-        try:
-            req = SACRequest("https://store.steampowered.com/api/appdetails?appids=" + str(appID) + "&filters=basic", "RetrieveGame").req
-        except Exception:
-            gameFoundStatus.config(text=f"An error has occurred")
+        data = RetrieveAppDetails(appID, "RetrieveGame", verbose=True)
+        if data is None:
+            gameFoundStatus.config(text="Steam AppDetails unavailable - please try again")
             return False
-        data = req.json()
-        data = data[str(appID)]
-        if not data["success"]:
-            update_logs(f"\n[!] AppID {appID} not found.")
+
+        if not data.get("success"):
+            update_logs(f"\n[!] AppID {appID} not found or unavailable in this Steam region.")
             gameFoundStatus.config(text=f"AppID {appID} not found.")
             appID = 0
             return False
-        if config["Advanced"]["BypassGameVerification"] != "1" and data["data"]["type"] != "game":
+
+        game_data = data.get("data")
+        if not isinstance(game_data, dict):
+            update_logs(f"\n[!] Steam returned no usable game data for AppID {appID}.")
+            gameFoundStatus.config(text="Steam returned incomplete game data")
+            return False
+
+        game_type = game_data.get("type")
+        if config["Advanced"]["BypassGameVerification"] != "1" and game_type != "game":
             update_logs(f"\n[!] AppID {appID} is not a game. You can bypass this verification in the Advanced settings.")
             gameFoundStatus.config(text=f"AppID {appID} is not a game.")
             appID = 0
             return False
 
-        gameName = data["data"]["name"]
-        appID = data["data"]["steam_appid"]
+        gameName = game_data.get("name")
+        if not gameName:
+            update_logs(f"\n[!] Steam returned AppID {appID} without a game name.")
+            gameFoundStatus.config(text="Steam returned incomplete game data")
+            return False
+
+        appID = int(game_data.get("steam_appid", appID))
         update_logs(f"- Game found! Name: {gameName} - AppID: {appID}")
 
         update_logs("\n[2/2] Retrieving DLCs...")
@@ -352,8 +441,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
             # Old retrieve option
             update_logs("Using the old retrieve option (RetrieveDLCOption is set to 1)")
 
-            if "dlc" in data["data"]:
-                dlcIDs = data["data"]["dlc"]
+            if "dlc" in game_data:
+                dlcIDs = game_data["dlc"]
                 dlcIDsLen = len(dlcIDs)
 
                 if dlcIDsLen >= HIGH_DLC_WARNING:

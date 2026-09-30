@@ -7,6 +7,7 @@ This fork keeps the upstream 2.2.2 codebase and selectively integrates maintaine
 Included here:
 - Light, Dark and Black UI themes plus the monospaced log fix from Sir-Kam's theme work.
 - Live Steam Store game-name lookup, replacing the obsolete local/GetAppList dependency.
+- Defensive Steam AppDetails handling for upstream issue #124: missing/empty AppID responses now retry without the `basic` filter and fail cleanly instead of raising `KeyError`.
 - `pefile`-based PE version detection, avoiding the old `win32api` dependency.
 - PyInstaller-aware resource/user-data paths and safer Steamless path handling.
 - A resizable UI with an expandable, scrollable log pane.
