@@ -10,7 +10,7 @@ on:
         type: boolean
   push:
     branches:
-      - "release-*"
+      - "publish-v*"
 
 permissions:
   contents: write
@@ -95,7 +95,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish or update GitHub release
-        if: startsWith(github.ref_name, 'release-') || inputs.publish == true
+        if: startsWith(github.ref_name, 'publish-v') || inputs.publish == true
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
