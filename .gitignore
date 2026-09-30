@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local/runtime files
+config.ini
+applist.txt
+*.log
+steam_auto_cracker_gui_autoupdater.exe
+
+# Packaging/build output
+build/
+dist/
+*.spec
+
+# Editor/OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
