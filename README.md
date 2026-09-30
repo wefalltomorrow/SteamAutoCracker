@@ -1,33 +1,35 @@
-# SteamAutoCracker
+# SteamAutoCracker — wefalltomorrow fork
 
-## wefalltomorrow best-of fork
+[![CI](https://github.com/wefalltomorrow/SteamAutoCracker/actions/workflows/ci.yml/badge.svg)](https://github.com/wefalltomorrow/SteamAutoCracker/actions/workflows/ci.yml)
+![GitHub all releases](https://img.shields.io/github/downloads/wefalltomorrow/SteamAutoCracker/total?color=brightgreen&label=Fork%20downloads)
+![GitHub release (latest by date)](https://img.shields.io/github/downloads/wefalltomorrow/SteamAutoCracker/latest/total?color=green&label=Latest%20release)
+![GitHub Repo stars](https://img.shields.io/github/stars/wefalltomorrow/SteamAutoCracker?color=yellow&label=Stars)
 
-This fork keeps the upstream 2.2.2 codebase and selectively integrates maintained improvements from the SteamAutoCracker fork/PR ecosystem rather than merging every divergent fork wholesale.
+A maintained best-of fork of BigBoiCJ/SteamAutoCracker, based on upstream 2.2.2 and selectively integrating useful fixes from active forks and upstream pull requests.
 
-Included here:
-- Light, Dark and Black UI themes plus the monospaced log fix from Sir-Kam's theme work.
-- Live Steam Store game-name lookup, replacing the obsolete local/GetAppList dependency.
-- Defensive Steam AppDetails handling for upstream issue #124: missing/empty AppID responses now retry without the `basic` filter and fail cleanly instead of raising `KeyError`.
-- `pefile`-based PE version detection, avoiding the old `win32api` dependency.
-- PyInstaller-aware resource/user-data paths and safer Steamless path handling.
-- A resizable UI with an expandable, scrollable log pane.
-- Fork-safe update checks: newer upstream releases open in the browser instead of silently replacing this fork.
-- A small Windows CI workflow that verifies supported Python sources compile and the PE helper imports.
+## Fork release: v2.3.0-wft.1
 
-Not copied verbatim:
-- The broken boilerplate Conda workflow and placeholder SECURITY.md from codingforfun5435.
-- sign-river's Chinese-first defaults, remote DLC server manager, and other unrelated/invasive changes.
-- Experimental RUNE binary-patching changes from PR #112; that PR still contains code paths that need more review before they are appropriate for a stability-focused merge.
-![GitHub all releases](https://img.shields.io/github/downloads/BigBoiCJ/SteamAutoCracker/total?color=brightgreen&label=Total%20downloads)
-![GitHub release (latest by date)](https://img.shields.io/github/downloads/BigBoiCJ/SteamAutoCracker/latest/total?color=green&label=Latest%20version%20downloads)
-![GitHub Repo stars](https://img.shields.io/github/stars/BigBoiCJ/SteamAutoCracker?color=yellow&label=Stars)
-![GitHub watchers](https://img.shields.io/github/watchers/BigBoiCJ/SteamAutoCracker?label=Watchers)
+This release combines the maintenance work from PR #1 and PR #2:
 
-An open-source script that automatically Cracks (removes DRM from) Steam games
+- Light, Dark and Black themes with a monospaced log view.
+- Resizable main window with an expandable, scrollable log pane.
+- Live Steam Store name lookup instead of the obsolete local/GetAppList flow.
+- Robust HTTP retry handling.
+- Defensive Steam AppDetails parsing for upstream issue #124: missing/empty AppID responses no longer raise `KeyError`, and SAC retries once without the `basic` filter before failing cleanly.
+- Portable `pefile` version detection instead of `win32api` / `pywin32`.
+- PyInstaller-aware resource paths and safer writable config/log locations.
+- Safer Steamless path handling.
+- Fork-safe update checks: an upstream release opens in the browser instead of silently replacing this fork.
+- Windows CI on Python 3.10 and 3.13, including a regression test for issue #124.
+- Reproducible Windows release builds through GitHub Actions.
+
+Changes intentionally not copied wholesale include sign-river's Chinese-first defaults/remote DLC server work, codingforfun5435's broken boilerplate Conda workflow, and the experimental RUNE binary-patching implementation from upstream PR #112.
+
+An open-source script that automatically Cracks (removes DRM from) Steam games.
 
 ## How to use (easy way)
-- Download the bundled/compiled version by clicking [here](https://github.com/BigBoiCJ/SteamAutoCracker/releases/latest) and downloading the file named `Steam.Auto.Cracker.GUI.vX.X.X.zip`
-- Extract the content of the archive (.zip) somewhere on your computer
+- Download the latest compiled fork release from [wefalltomorrow/SteamAutoCracker releases](https://github.com/wefalltomorrow/SteamAutoCracker/releases/latest). The release archive is named `Steam.Auto.Cracker.GUI.vX.X.X-wft.X.zip`.
+- Extract the archive somewhere on your computer.
 - Run `steam_auto_cracker_gui.exe`
 - Select the folder of your game
 - Enter the name of the game to try to crack it! (you can also enter the Steam AppID if you know it)
@@ -47,7 +49,7 @@ An open-source script that automatically Cracks (removes DRM from) Steam games
     - Goldberg (Game)
     - CreamAPI (DLC)
 - Open source, transparent and privacy focused. No hidden analytics or weird things!
-- An opt-in autoupdater and version checker. Opt-in for privacy!
+- An opt-in upstream version checker. This fork does not silently replace itself with the upstream executable; it opens the upstream release page instead.
 
 ## Screenshots
 Screenshots from v2.0.0
@@ -69,7 +71,7 @@ Screenshots from v2.0.0
   - The `tkinter` module, but it should be included in Python by default.
   - As of v2.2.0 GUI, the `tkinterdnd2` module is required as well (v0.4.0+). Install it with `py -m pip install tkinterdnd2`. ([pypi link](https://pypi.org/project/tkinterdnd2/) - [github link](https://github.com/Eliav2/tkinterdnd2))
   - This fork also uses `ttkbootstrap` for Light/Dark/Black themes. Install with `py -m pip install ttkbootstrap`.
-  - I believe Python 3.7+ is needed.
+  - Python 3.10 or newer is recommended. CI currently verifies Python 3.10 and 3.13.
 
 ## Notes about DLCs
 Some DLCs in some games requires you to download additional files.\
@@ -77,18 +79,17 @@ This tool is not able to download those files, you'll have to get a clean versio
 
 You can get clean Steam files for games (and sometimes DLCs) in the [Steam Content Sharing section from cs.rin.ru](https://cs.rin.ru/forum/viewforum.php?f=22)
 
-## Windows Build informations
-Compiled using [pyinstaller](https://pypi.org/project/pyinstaller/) and venv\
-Was previously compiled using [auto-py-to-exe](https://pypi.org/project/auto-py-to-exe/) (which is just a GUI for pyinstaller)
+## Windows build information
+Release builds are produced with [PyInstaller](https://pyinstaller.org/) on GitHub Actions. The one-file executable bundles the `sac_emu`, `Steamless_CLI`, icon, tkinterdnd2 and ttkbootstrap resources required by the GUI.
 
-Instructions on how to compile SAC, as well as useful scripts are available here: https://github.com/BigBoiCJ/SteamAutoCracker/tree/compile-env
+See [BUILDING.md](BUILDING.md) for the exact reproducible build command. The release workflow also publishes a SHA-256 checksum next to the ZIP archive.
 
 ## Privacy
 SAC will do requests to `steampowered.com` (Steam's official website) to retrieve AppIDs and DLCs.\
 It is not bannable, and won't cause you problems.
 
-SAC will do requests to this GitHub repository to check for updates, download the autoupdater and new releases.\
-This only happens if you decide to manually click on the "Check for updates" button, and decide to update using the autoupdater. SAC can also automatically check for updates if enabled in the settings (it is disabled by default)
+SAC can request the upstream GitHub version metadata when you manually click "Check for updates", or automatically if you enable update checks in settings. Automatic checking is disabled by default.\
+This fork does not download/run the upstream autoupdater; when a newer upstream release is detected it opens the release page in your browser.
 
 Nothing is logged by SAC.\
 You can delete the SAC folder at any time and there won't be any leftovers. *

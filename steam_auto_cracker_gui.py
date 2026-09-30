@@ -29,7 +29,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     from difflib import SequenceMatcher
     import typing
 
-    VERSION = "2.2.2"
+    VERSION = "2.3.0-wft.1"
 
     RETRY_DELAY = 15 # Delay in seconds before retrying a failed request. (default, can be modified in config.ini)
     RETRY_MAX = 30 # Number of failed tries (includes the first try) after which SAC will stop trying and quit. (default, can be modified in config.ini)

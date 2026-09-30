@@ -1,0 +1,115 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish/update the GitHub release after building
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches:
+      - "publish-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out main release source
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Read application version
+        id: version
+        shell: pwsh
+        run: |
+          $match = Select-String -Path "steam_auto_cracker_gui.py" -Pattern 'VERSION = "([^"]+)"'
+          if (-not $match) {
+            throw "Could not find VERSION in steam_auto_cracker_gui.py"
+          }
+          $version = $match.Matches[0].Groups[1].Value
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "zip=Steam.Auto.Cracker.GUI.v$version.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Build one-file Windows executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name steam_auto_cracker_gui `
+            --icon icon_hashtag.ico `
+            --add-data "sac_emu;sac_emu" `
+            --add-data "Steamless_CLI;Steamless_CLI" `
+            --add-data "icon_hashtag.ico;." `
+            --collect-all tkinterdnd2 `
+            --collect-all ttkbootstrap `
+            steam_auto_cracker_gui.py
+
+          if (-not (Test-Path "dist\steam_auto_cracker_gui.exe")) {
+            throw "PyInstaller did not produce dist\steam_auto_cracker_gui.exe"
+          }
+
+      - name: Package release archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "release-package" | Out-Null
+          Copy-Item "dist\steam_auto_cracker_gui.exe" "release-package\steam_auto_cracker_gui.exe"
+          Copy-Item "README.md" "release-package\README.md"
+          Copy-Item "LICENSE" "release-package\LICENSE"
+          Copy-Item "CHANGELOG.md" "release-package\CHANGELOG.md"
+
+          New-Item -ItemType Directory -Force -Path "release" | Out-Null
+          $zip = "release\${{ steps.version.outputs.zip }}"
+          Compress-Archive -Path "release-package\*" -DestinationPath $zip -CompressionLevel Optimal
+
+          $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ${{ steps.version.outputs.zip }}" | Set-Content -Path "$zip.sha256" -Encoding ascii
+
+          Get-Item $zip
+          Get-Content "$zip.sha256"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SteamAutoCracker-${{ steps.version.outputs.version }}-windows
+          path: |
+            release/${{ steps.version.outputs.zip }}
+            release/${{ steps.version.outputs.zip }}.sha256
+          if-no-files-found: error
+
+      - name: Publish or update GitHub release
+        if: startsWith(github.ref_name, 'publish-v') || inputs.publish == true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $title = "SteamAutoCracker ${{ steps.version.outputs.tag }} — wefalltomorrow fork"
+          $zip = "release\${{ steps.version.outputs.zip }}"
+          $sha = "$zip.sha256"
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $zip $sha --clobber
+            gh release edit $tag --title $title --notes-file RELEASE_NOTES.md
+          }
+          else {
+            gh release create $tag $zip $sha --target main --title $title --notes-file RELEASE_NOTES.md
+          }
