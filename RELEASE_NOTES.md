@@ -1,5 +1,7 @@
 # SteamAutoCracker v2.3.0-wft.1
 
+> **Hotfix rebuild (2026-10-01):** fixes the compiled EXE exiting at startup with `AttributeError: module 'ttkbootstrap' has no attribute 'BOTH'`. The release builder now injects the missing classic Tk constants before the GUI starts, covering `BOTH`, `LEFT`, `RIGHT`, `Y`, `END`, `NORMAL`, and `DISABLED`.
+
 First maintained release of the wefalltomorrow best-of fork, based on upstream 2.2.2.
 
 ## Highlights

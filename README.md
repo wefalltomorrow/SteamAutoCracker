@@ -9,6 +9,8 @@ A maintained best-of fork of BigBoiCJ/SteamAutoCracker, based on upstream 2.2.2 
 
 ## Fork release: v2.3.0-wft.1
 
+> **2026-10-01 hotfix rebuild:** the original compiled asset could exit immediately because `ttkbootstrap` does not expose classic Tk constants such as `BOTH`. The release build now loads a compatibility runtime hook before the GUI starts.
+
 This release combines the maintenance work from PR #1 and PR #2:
 
 - Light, Dark and Black themes with a monospaced log view.

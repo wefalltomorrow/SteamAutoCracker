@@ -4,6 +4,11 @@ All notable changes to the wefalltomorrow SteamAutoCracker fork are documented h
 
 ## 2.3.0-wft.1 — 2026-10-01
 
+### Hotfix rebuild
+
+- Fixed the compiled EXE failing before the GUI opens because `ttkbootstrap` was used as the `tk` alias but does not export classic Tk constants such as `BOTH`.
+- Added a PyInstaller runtime compatibility hook for all affected constants and CI coverage for the startup path.
+
 First maintained best-of fork release, based on upstream SteamAutoCracker 2.2.2.
 
 ### Added
