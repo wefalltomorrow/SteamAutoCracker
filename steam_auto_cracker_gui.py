@@ -123,7 +123,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
                 f"SACRequest: {self.name} failed after {max_tries} tries"
             ) from last_error
 
-    def handle_folder_selection    def handle_folder_selection(event=None):
+    def handle_folder_selection(event=None):
         global folder_path
         global last_selected_folder
         last_selected_folder = config["Preferences"].get("last_selected_folder", "")
@@ -289,7 +289,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         )
         gameFoundStatus.config(text="Using live Steam Store search")
 
-    def RetrieveAppName    def RetrieveAppName(appID: int) -> str:
+    def RetrieveAppName(appID: int) -> str:
         try:
             req = SACRequest("https://store.steampowered.com/api/appdetails?appids=" + str(appID) + "&filters=basic", "RetrieveAppName").req
         except Exception:
@@ -1034,7 +1034,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         updatesButton.config(text="New upstream release available", state=tk.NORMAL)
         DisplayUpdate()
 
-    def DisplayUpdate    def DisplayUpdate():
+    def DisplayUpdate():
         top = tk.Toplevel(root)
         top.title(f"SteamAutoCracker GUI v{VERSION} - Update")
         top.resizable(False, False) # Prevents resizing the window's width and height
@@ -1077,7 +1077,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         root.update()
         webbrowser.open(release_link)
 
-    def CopyReleaseURL    def CopyReleaseURL():
+    def CopyReleaseURL():
         root.clipboard_clear()
         root.clipboard_append(release_link)
 
@@ -1196,7 +1196,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     logs_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
     logs_scrollbar.config(command=logs_text.yview)
 
-    text = f"SteamAutoCracker GUI v{VERSION} by BigBoiCJ"    text = f"SteamAutoCracker GUI v{VERSION} by BigBoiCJ"
+    text = f"SteamAutoCracker GUI v{VERSION} by BigBoiCJ"
     buf = ""
     for i in range(len(text)):
         buf += "-"
