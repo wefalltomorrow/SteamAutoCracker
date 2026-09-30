@@ -17,6 +17,10 @@ try: # Handles Python errors to write them to a log file so they can be reported
     import json
     import subprocess
     from sac_lib.get_file_version import GetFileVersion
+    from sac_lib.steam_store import (
+        describe_appdetails_problem,
+        extract_appdetails_entry,
+    )
     import shutil
     from time import sleep
     from sys import exit
@@ -340,26 +344,12 @@ try: # Handles Python errors to write them to a log file so they can be reported
                 last_problem = f"invalid JSON: {exc}"
                 payload = None
 
-            if isinstance(payload, dict):
-                entry = payload.get(app_id)
-                if isinstance(entry, dict):
-                    return entry
+            entry = extract_appdetails_entry(payload, app_id)
+            if entry is not None:
+                return entry
 
-                # Be tolerant if Steam ever returns the single-app entry directly.
-                if "success" in payload and (
-                    "data" in payload or payload.get("success") is False
-                ):
-                    return payload
-
-                keys = list(payload.keys())
-                if keys:
-                    last_problem = "requested AppID key missing; returned keys: " + ", ".join(
-                        str(key) for key in keys[:5]
-                    )
-                else:
-                    last_problem = "empty JSON object"
-            elif payload is not None:
-                last_problem = f"unexpected JSON type: {type(payload).__name__}"
+            if payload is not None:
+                last_problem = describe_appdetails_problem(payload, app_id)
 
             if attempt_index == 0 and verbose:
                 update_logs(
