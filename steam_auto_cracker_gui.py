@@ -1,3 +1,5 @@
+import os
+import sys
 import traceback
 
 try: # Handles Python errors to write them to a log file so they can be reported and fixed more easily.
@@ -13,13 +15,11 @@ try: # Handles Python errors to write them to a log file so they can be reported
     import requests
     import configparser
     import json
-    import os
     import subprocess
     from sac_lib.get_file_version import GetFileVersion
     import shutil
     from time import sleep
     from sys import exit
-    import sys
     import re
     import webbrowser
     from difflib import SequenceMatcher
@@ -226,7 +226,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
             selectFolderButton.config(state=tk.NORMAL) # Re-enable the ability to change the selected folder
 
     def _normalize_game_name(value):
-        return re.sub(r"[^a-z0-9]+", " ", str(value or "").casefold()).strip()
+        value = str(value or "").casefold()
+        return " ".join("".join(ch if ch.isalnum() else " " for ch in value).split())
 
     def _game_name_score(target, candidate):
         target_norm = _normalize_game_name(target)
@@ -656,7 +657,6 @@ try: # Handles Python errors to write them to a log file so they can be reported
             style.configure("TRadiobutton", padding=6)
             style.configure("TButton", padding=10)
             style.configure("TEntry", padding=6)
-            style.configure("TEntry", padding=0)
 
     # ----- Settings -----
 
@@ -717,7 +717,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         
         # Update options (UpdateOption)
         ttk.Label(scrollFrame, text="Updates:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
-        ttk.Label(scrollFrame, text="This will search the latest version on GitHub.\nIf you're afraid of leaking your IP to GitHub, use a VPN and/or disable auto updating.", font=FONT4, padding=0, foreground="#575757", wraplength=600).pack(padx=(6, 0), pady=(0,0), anchor="w")
+        ttk.Label(scrollFrame, text="This checks the latest upstream version on GitHub.\nIf you prefer not to make that request automatically, disable automatic update checks.", font=FONT4, padding=0, foreground="#575757", wraplength=600).pack(padx=(6, 0), pady=(0,0), anchor="w")
         settings_frame_updates = ttk.Frame(scrollFrame)
         settings_frame_updates.pack(padx=(15, 0), pady=(0, 0), anchor="w")
 
@@ -848,6 +848,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
         ResetConfig(1)
 
         # Update the radio buttons values
+        ThemeOption_var.set(config["Preferences"]["ThemeOption"])
+        ApplyStyle()
         UpdateOption_var.set(config["Preferences"]["UpdateOption"])
         CrackOption_var.set(config["Preferences"]["CrackOption"])
         Steamless_var.set(config["Preferences"]["Steamless"])
@@ -1041,7 +1043,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         biggerFont = DEFAULT_FONT.copy()
         biggerFont.config(size=10)
         ttk.Label(top, text= "Update", font=FONT2).pack(padx=200, pady=(10,10), anchor="center")
-        ttk.Label(top, text="A new update for Steam Auto Cracker GUI is available.\nDo you want to download it automatically?", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
+        ttk.Label(top, text="A newer upstream SteamAutoCracker release is available.\nYou can open its release page without replacing this fork automatically.", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
         ttk.Label(top, text=f"Current version: {VERSION}", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(15,0), anchor="w")
         ttk.Label(top, text=f"Latest version: {latestversion}", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(0,10), anchor="w")
 
@@ -1217,9 +1219,11 @@ try: # Handles Python errors to write them to a log file so they can be reported
     root.mainloop()
 
 except Exception:
-    # Handle Python errors
+    # Handle Python errors. Keep this independent of helpers defined inside the try block,
+    # because an import failure can happen before those helpers exist.
     print("\n[!!!] A Python error occurred! Writing the error to the error.log file.\n---")
-    with open(get_user_path("error.log"), "w", encoding="utf-8") as errorFile:
+    error_base = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(error_base, "error.log"), "w", encoding="utf-8") as errorFile:
         errorFile.write(f"SteamAutoCracker GUI v{VERSION}\n---\nA Python error occurred!\nPlease report it on GitHub or cs.rin.ru\nMake sure to blank any personal detail.\n---\n\n")
         traceback.print_exc(file=errorFile)
     traceback.print_exc()
