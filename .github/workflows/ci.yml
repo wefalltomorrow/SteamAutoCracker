@@ -26,5 +26,8 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q steam_auto_cracker_gui.py sac_lib
 
-      - name: Import portable PE version helper
-        run: python -c "from sac_lib.get_file_version import GetFileVersion; print('get_file_version import OK')"
+      - name: Import GUI dependencies
+        run: python -c "import ttkbootstrap as tk; import ttkbootstrap; from tkinterdnd2 import TkinterDnD; assert hasattr(tk, 'Text'); assert hasattr(ttkbootstrap.themes.standard, 'STANDARD_THEMES'); print('GUI dependencies OK')"
+
+      - name: Exercise portable PE version helper
+        run: python -c "import os; from sac_lib.get_file_version import GetFileVersion; print(GetFileVersion(os.path.join(os.environ['WINDIR'], 'System32', 'kernel32.dll')))"
