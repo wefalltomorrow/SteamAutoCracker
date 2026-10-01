@@ -4,13 +4,13 @@ Best-of-all maintenance release combining the strongest maintainable ideas from 
 
 ## Highlights
 
-- Browse detected installed Steam games instead of manually finding every folder/AppID.
+- Browse detected installed Steam games instead of manually finding every folder/AppID, with filtering and multi-select batch preflight.
 - Steam library discovery reads the normal Steam registry/default paths, `libraryfolders.vdf`, and `appmanifest_*.acf` files.
 - Selecting a normal Steam install folder can auto-fill its AppID/build metadata.
 - Recursive Steam API DLL validation catches nested game layouts and drive-root selection is rejected.
 - Steam Store metadata work runs in a background worker rather than blocking Tk.
 - Optional GBE_FORK updates are downloaded from the official release, verified against reported asset size/SHA-256, safely extracted, and cached beside SAC.
-- Optional Steamless-KR updates use the same verified flow. Modern cached Steamless runs in-place and SAC records the actual CLI exit result.
+- Optional Steamless-KR updates use the same verified flow. Modern cached Steamless runs in-place and SAC records the actual CLI exit result. If .NET 9 is unavailable or the modern tool cannot unpack a target, SAC falls back to the bundled compatibility build.
 - Compiled releases include a new `steam_auto_cracker_cli.exe` diagnostics/maintenance utility.
 - Existing restore safety remains: manifests, traversal protection, no backup overwrite, preserved modified files, and truthful operation summaries.
 
