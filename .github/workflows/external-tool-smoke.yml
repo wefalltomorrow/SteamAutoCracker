@@ -25,7 +25,10 @@ jobs:
         shell: python
         run: |
           import os
+          import sys
           import tempfile
+
+          sys.path.insert(0, os.getcwd())
 
           from sac_lib.tool_updater import (
               get_cached_gbe_dll,
