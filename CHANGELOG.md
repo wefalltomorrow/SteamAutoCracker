@@ -5,7 +5,7 @@
 ### Added
 
 - Installed Steam game discovery from Steam registry/default locations, `libraryfolders.vdf`, and `appmanifest_*.acf`.
-- Installed-games browser with game name, AppID, build ID, install path, filtering, and one-click selection.
+- Installed-games browser with game name, AppID, build ID, install path, filtering, one-click selection, and multi-select batch preflight.
 - Automatic AppID matching when manually selecting a normal Steam game folder.
 - Recursive Steam API DLL preflight validation and drive-root selection protection.
 - Background-safe Steam Store client and Tk worker queue for non-blocking metadata/library/update operations.
@@ -19,7 +19,7 @@
 
 - Steam title/AppID metadata lookup now runs outside the Tk UI thread.
 - GBE_FORK/Goldberg mode automatically prefers verified cached GBE_FORK x86/x64 DLLs when present while retaining the bundled fallback.
-- Steamless automatically prefers a verified cached Steamless-KR CLI while retaining the bundled legacy fallback.
+- Steamless automatically prefers a verified cached Steamless-KR CLI while retaining the bundled legacy fallback; modern-tool launch/unpack failures fall back automatically.
 - Settings window exposes explicit manual update controls for maintained external tools.
 - Release builds now also produce `steam_auto_cracker_cli.exe`.
 
