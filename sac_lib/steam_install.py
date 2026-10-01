@@ -227,6 +227,49 @@ def find_installed_games(extra_roots=None):
     return games
 
 
+def find_game_for_path(game_path):
+    """Return the Steam appmanifest entry matching a selected common/<installdir> path."""
+    if not game_path:
+        return None
+
+    normalized = _norm(game_path)
+    basename = os.path.basename(normalized.rstrip("\\/"))
+    parent = os.path.dirname(normalized.rstrip("\\/"))
+
+    if os.path.basename(parent).casefold() != "common":
+        return None
+
+    steamapps = os.path.dirname(parent)
+    if os.path.basename(steamapps).casefold() != "steamapps":
+        return None
+
+    try:
+        names = os.listdir(steamapps)
+    except OSError:
+        return None
+
+    for name in names:
+        if not name.startswith("appmanifest_") or not name.endswith(".acf"):
+            continue
+        manifest_path = os.path.join(steamapps, name)
+        try:
+            info = parse_appmanifest(manifest_path)
+        except (OSError, ValueError):
+            continue
+
+        if info["installdir"].casefold() != basename.casefold():
+            continue
+
+        return {
+            **info,
+            "path": normalized,
+            "library": _norm(os.path.dirname(steamapps)),
+            "manifest": manifest_path,
+        }
+
+    return None
+
+
 def find_steam_api_files(game_path):
     targets = {"steam_api.dll", "steam_api64.dll"}
     found = []
