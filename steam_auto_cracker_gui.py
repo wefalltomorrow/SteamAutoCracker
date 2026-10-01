@@ -1132,7 +1132,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         
         # Update options (UpdateOption)
         ttk.Label(scrollFrame, text="Updates:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
-        ttk.Label(scrollFrame, text="This checks the latest upstream version on GitHub.\nIf you prefer not to make that request automatically, disable automatic update checks.", font=FONT4, padding=0, foreground="#575757", wraplength=600).pack(padx=(6, 0), pady=(0,0), anchor="w")
+        ttk.Label(scrollFrame, text="This checks the latest maintained-fork release on GitHub.\nIf you prefer not to make that request automatically, disable automatic update checks.", font=FONT4, padding=0, foreground="#575757", wraplength=600).pack(padx=(6, 0), pady=(0,0), anchor="w")
         settings_frame_updates = ttk.Frame(scrollFrame)
         settings_frame_updates.pack(padx=(15, 0), pady=(0, 0), anchor="w")
 
@@ -1512,7 +1512,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         updateDisplayButtonsFrame.pack(pady=(5,20))
 
         global updateDisplayButtonUpdate
-        updateDisplayButtonUpdate = ttk.Button(updateDisplayButtonsFrame, text="Open upstream release", command=UpdateSAC, padding=3)
+        updateDisplayButtonUpdate = ttk.Button(updateDisplayButtonsFrame, text="Open fork release", command=UpdateSAC, padding=3)
         updateDisplayButtonUpdate.grid(row=0, column=0)
 
         global updateDisplayButtonCopy
