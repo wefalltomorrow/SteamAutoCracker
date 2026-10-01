@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.4.0-wft.1 — 2026-10-01
+
+### Added
+
+- Installed Steam game discovery from Steam registry/default locations, `libraryfolders.vdf`, and `appmanifest_*.acf`.
+- Installed-games browser with game name, AppID, build ID, install path, filtering, and one-click selection.
+- Automatic AppID matching when manually selecting a normal Steam game folder.
+- Recursive Steam API DLL preflight validation and drive-root selection protection.
+- Background-safe Steam Store client and Tk worker queue for non-blocking metadata/library/update operations.
+- Verified optional GBE_FORK updater with release-size/SHA-256 validation, archive traversal protection, staging validation, and persistent cache.
+- Verified optional Steamless-KR updater with safe ZIP extraction and persistent full release cache.
+- In-place modern Steamless execution with captured exit code/stdout/stderr instead of temporarily moving game executables.
+- Diagnostics/maintenance CLI for installed games, folder validation, Steam metadata, safe restores, and external tool updates.
+- CI coverage for Steam VDF/appmanifest parsing, nested DLL validation, updater path traversal protection, cached tool resolution, and CLI startup.
+
+### Changed
+
+- Steam title/AppID metadata lookup now runs outside the Tk UI thread.
+- GBE_FORK/Goldberg mode automatically prefers verified cached GBE_FORK x86/x64 DLLs when present while retaining the bundled fallback.
+- Steamless automatically prefers a verified cached Steamless-KR CLI while retaining the bundled legacy fallback.
+- Settings window exposes explicit manual update controls for maintained external tools.
+- Release builds now also produce `steam_auto_cracker_cli.exe`.
+
+### Preserved
+
+- v2.3.1 safe restore manifests and `.sac-replaced` preservation.
+- v2.3.0 issue #124 AppDetails defensive parsing.
+- Fork-safe update behavior, themes, portable PE version parsing, CI and compiled-startup smoke tests.
+
+### Source projects reviewed
+
+- `SteamAutoCracks/Steam-auto-crack`: core/UI/CLI separation, maintained GBE_FORK/Steamless direction, verified updater concepts, asynchronous operations, and richer Steam metadata handling.
+- `harryeffinpotter/Steam-Autocracker-GUI`: installed-library/appmanifest discovery, nested Steam API handling, root-drive protection, persistent UX patterns, and non-blocking long-running operations.
+
+Upload/debrid/sharing pipelines and fragile hard-coded crack-size heuristics were intentionally excluded.
+
 ## 2.3.1-wft.1 — 2026-10-01
 
 ### Added
