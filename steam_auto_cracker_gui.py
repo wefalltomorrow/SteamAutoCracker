@@ -43,6 +43,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     )
     from sac_lib.background import run_background
     from sac_lib.package_builder import build_crack_only_archive
+    from sac_lib.run_result import classify_run_result
     from sac_lib.steamless_runner import run_modern_steamless
     from sac_lib.tool_updater import (
         get_cached_gbe_dll,
@@ -67,7 +68,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     import webbrowser
     import typing
 
-    VERSION = "2.4.0-wft.1"
+    VERSION = "2.4.1-wft.1"
 
     RETRY_DELAY = 15 # Delay in seconds before retrying a failed request. (default, can be modified in config.ini)
     RETRY_MAX = 30 # Number of failed tries (includes the first try) after which SAC will stop trying and quit. (default, can be modified in config.ini)
@@ -208,6 +209,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         selectedFolderLabel.config(text=f"Selected folder:\n{folder_path}")
         selectedFolderLabel.pack()
+        restoreFilesButton.config(text="Restore original files")
         restoreFilesButton.pack(pady=(0, 10))
         frameGame2.pack()
 
@@ -499,7 +501,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
             searchGameButton.config(state=tk.NORMAL)
             selectCrackButton.config(state=tk.NORMAL)
             crackGameButton.config(state=tk.NORMAL)
-            restoreFilesButton.config(state=tk.NORMAL)
+            restoreFilesButton.config(state=tk.NORMAL, text="Restore original files")
             root.update()
 
 
@@ -977,25 +979,39 @@ try: # Handles Python errors to write them to a log file so they can be reported
             f"new files tracked: {created_count}."
         )
 
-        if not cracked:
-            update_logs("[!] No Steam API DLL was found in the selected folder.")
-            gameFoundStatus.config(text="No Steam API DLL found")
-        elif steamless_failed > 0:
-            update_logs(
-                "[!] Completed with warnings. One or more executables were not processed by Steamless. "
-                "Files may have been modified, but launch compatibility has NOT been verified."
-            )
-            gameFoundStatus.config(text="Completed with warnings — launch not verified")
-        else:
-            update_logs(
-                "File modifications completed. Launch compatibility has NOT been verified."
-            )
-            gameFoundStatus.config(text="Files modified — launch not verified")
+        result = classify_run_result(
+            steam_api_replaced=cracked,
+            steamless_enabled=config["Preferences"]["Steamless"] == "1",
+            steamless_attempted=steamless_attempted,
+            steamless_succeeded=steamless_succeeded,
+            steamless_failed=steamless_failed,
+        )
+        update_logs(result["log"])
+        gameFoundStatus.config(text=result["status"])
 
-        if os.path.isfile(manifest_path(folder_path)):
-            update_logs(
-                "\nA restore manifest was saved. Use 'Restore original files' before another modification pass."
-            )
+        has_restore_manifest = os.path.isfile(manifest_path(folder_path))
+        if has_restore_manifest:
+            if result["restore_recommended"]:
+                restoreFilesButton.config(text="Restore original files (recommended)")
+                update_logs(
+                    "\nRestore data is available. Restore the original files before trying another crack method."
+                )
+            else:
+                update_logs(
+                    "\nRestore data was saved. Restore the original files before another modification pass."
+                )
+
+        if result["key"] == "steamless_failed":
+            try:
+                messagebox.showwarning(
+                    "Steamless did not unpack the game",
+                    "Steamless could not unpack any executable.\n\n"
+                    "The Steam API files were changed, but SteamStub or other launch checks may still be active, "
+                    "so Steam may still require a valid license.\n\n"
+                    "Use 'Restore original files (recommended)' before trying another method.",
+                )
+            except Exception:
+                pass
 
         EndCrack()
 
