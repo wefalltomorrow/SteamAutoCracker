@@ -133,7 +133,7 @@ def cmd_update_steamless(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="SteamAutoCracker best-of-all diagnostics and maintenance CLI"
+        description="SteamAutoCracker diagnostics and maintenance CLI"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
