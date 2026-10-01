@@ -86,7 +86,7 @@ An open-source script that automatically Cracks (removes DRM from) Steam games.
     - Goldberg (Game)
     - CreamAPI (DLC)
 - Open source, transparent and privacy focused. No hidden analytics or weird things!
-- An opt-in upstream version checker. This fork does not silently replace itself with the upstream executable; it opens the upstream release page instead.
+- An opt-in maintained-fork version checker. It checks this fork's GitHub releases and opens the release page instead of silently replacing the executable.
 
 ## Screenshots
 Screenshots from v2.0.0
@@ -143,8 +143,8 @@ See [BUILDING.md](BUILDING.md) for the exact reproducible build command. The rel
 SAC will do requests to `steampowered.com` (Steam's official website) to retrieve AppIDs and DLCs.\
 It is not bannable, and won't cause you problems.
 
-SAC can request the upstream GitHub version metadata when you manually click "Check for updates", or automatically if you enable update checks in settings. Automatic checking is disabled by default.\
-This fork does not download/run the upstream autoupdater; when a newer upstream release is detected it opens the release page in your browser.
+SAC can request this fork's public GitHub latest-release metadata when you manually click "Check for updates", or automatically if you enable update checks in settings. Automatic checking is disabled by default.\
+The fork does not silently replace itself; when a newer maintained release is detected it opens the release page in your browser.
 
 Nothing is logged by SAC.\
 You can delete the SAC folder at any time and there won't be any leftovers. *
