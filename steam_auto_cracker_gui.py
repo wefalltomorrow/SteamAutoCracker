@@ -834,6 +834,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         # Prevents the user from searching a game or selecting a folder or re-clicking the crack game button
         selectFolderButton.config(state=tk.DISABLED)
+        installedGamesButton.config(state=tk.DISABLED)
         searchGameButton.config(state=tk.DISABLED)
         selectCrackButton.config(state=tk.DISABLED)
         crackGameButton.config(state=tk.DISABLED)
@@ -1131,6 +1132,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         # Now let's remove locks
         selectFolderButton.config(state=tk.NORMAL)
+        installedGamesButton.config(state=tk.NORMAL)
         searchGameButton.config(state=tk.NORMAL)
         selectCrackButton.config(state=tk.NORMAL)
         crackGameButton.config(state=tk.NORMAL)
@@ -1686,7 +1688,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     ApplyStyle()
 
     ttk.Label(root, text=f"SteamAutoCracker GUI v{VERSION}", font=FONT2, padding=0).pack(pady=(10, 0), anchor="center")
-    ttk.Label(root, text="by BigBoiCJ", padding=0).pack(pady=(0, 0), anchor="center")
+    ttk.Label(root, text="BigBoiCJ base · wefalltomorrow best-of-all fork", padding=0).pack(pady=(0, 0), anchor="center")
 
     updatesFrame = tk.Frame(root)
     updatesButton = ttk.Button(updatesFrame, text="Check for updates", command=CheckUpdates, padding=0)
@@ -1703,8 +1705,25 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     # Select folder fields
     tk.Label(root, text="Select where your game is installed :",).pack(pady=(20, 5), anchor="center")
-    selectFolderButton = ttk.Button(root, text="Select a folder", command=lambda: handle_folder_selection())
-    selectFolderButton.pack(pady=(0, 10))
+    folderButtonsFrame = ttk.Frame(root)
+    folderButtonsFrame.pack(pady=(0, 4))
+
+    selectFolderButton = ttk.Button(
+        folderButtonsFrame,
+        text="Select a folder",
+        command=lambda: handle_folder_selection(),
+    )
+    selectFolderButton.grid(row=0, column=0, padx=(0, 6))
+
+    installedGamesButton = ttk.Button(
+        folderButtonsFrame,
+        text="Installed Steam games",
+        command=BrowseInstalledGames,
+    )
+    installedGamesButton.grid(row=0, column=1, padx=(6, 0))
+
+    installedGamesStatus = ttk.Label(root, text="")
+    installedGamesStatus.pack(pady=(0, 8))
 
     selectedFolderFrame = tk.Frame(root) # This frame will contain the label. This is so we can resize the root window properly when the text is empty.
     selectedFolderFrame.pack()
