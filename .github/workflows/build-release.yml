@@ -67,6 +67,25 @@ jobs:
             throw "PyInstaller did not produce dist\steam_auto_cracker_gui.exe"
           }
 
+      - name: Build maintenance CLI
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --console `
+            --name steam_auto_cracker_cli `
+            sac_cli.py
+
+          if (-not (Test-Path "dist\steam_auto_cracker_cli.exe")) {
+            throw "PyInstaller did not produce dist\steam_auto_cracker_cli.exe"
+          }
+
+      - name: Smoke test maintenance CLI
+        shell: pwsh
+        run: |
+          & "dist\steam_auto_cracker_cli.exe" --help
+          if ($LASTEXITCODE -ne 0) {
+            throw "Maintenance CLI smoke test failed."
+          }
+
       - name: Smoke test compiled GUI startup
         shell: pwsh
         run: |
@@ -103,6 +122,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "release-package" | Out-Null
           Copy-Item "dist\steam_auto_cracker_gui.exe" "release-package\steam_auto_cracker_gui.exe"
+          Copy-Item "dist\steam_auto_cracker_cli.exe" "release-package\steam_auto_cracker_cli.exe"
           Copy-Item "README.md" "release-package\README.md"
           Copy-Item "LICENSE" "release-package\LICENSE"
           Copy-Item "CHANGELOG.md" "release-package\CHANGELOG.md"
