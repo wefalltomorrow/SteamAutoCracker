@@ -24,7 +24,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Python sources
-        run: python -m compileall -q steam_auto_cracker_gui.py sac_lib
+        run: python -m compileall -q steam_auto_cracker_gui.py sac_cli.py sac_lib
 
       - name: Import GUI dependencies
         run: python -c "import ttkbootstrap as tk; import ttkbootstrap; from tkinterdnd2 import TkinterDnD; assert hasattr(tk, 'Text'); assert hasattr(ttkbootstrap.themes.standard, 'STANDARD_THEMES'); print('GUI dependencies OK')"
@@ -152,6 +152,110 @@ jobs:
           assert "launch compatibility has NOT been verified" in source
           assert "Restore original files" in source
           print("truthful outcome reporting regression OK")
+      - name: Regression test Steam library discovery and validation
+        shell: python
+        run: |
+          import os
+          import sys
+          import tempfile
+
+          sys.path.insert(0, os.getcwd())
+
+          from sac_lib.steam_install import (
+              find_game_for_path,
+              find_installed_games,
+              parse_vdf,
+              validate_game_folder,
+          )
+
+          sample = '"libraryfolders"\n{\n"0" { "path" "C:\\\\Steam" }\n}'
+          parsed = parse_vdf(sample)
+          assert parsed["libraryfolders"]["0"]["path"] == "C:\\Steam"
+
+          with tempfile.TemporaryDirectory() as root:
+              steamapps = os.path.join(root, "steamapps")
+              common = os.path.join(steamapps, "common")
+              game = os.path.join(common, "Example Game")
+              nested = os.path.join(game, "bin", "win64")
+              os.makedirs(nested)
+
+              with open(os.path.join(nested, "steam_api64.dll"), "wb") as handle:
+                  handle.write(b"test")
+
+              with open(os.path.join(steamapps, "appmanifest_123.acf"), "w", encoding="utf-8") as handle:
+                  handle.write(
+                      '"AppState"\n{\n'
+                      '"appid" "123"\n'
+                      '"name" "Example Game"\n'
+                      '"installdir" "Example Game"\n'
+                      '"buildid" "456"\n'
+                      '}\n'
+                  )
+
+              games = find_installed_games(extra_roots=[root])
+              assert any(item["appid"] == "123" for item in games), games
+
+              matched = find_game_for_path(game)
+              assert matched and matched["appid"] == "123"
+              assert matched["buildid"] == "456"
+
+              validation = validate_game_folder(game)
+              assert validation["valid"] is True
+              assert len(validation["steam_api_files"]) == 1
+              assert validation["steam_api_files"][0].endswith("steam_api64.dll")
+
+          print("Steam library discovery regression OK")
+
+      - name: Regression test verified tool updater helpers
+        shell: python
+        run: |
+          import json
+          import os
+          import sys
+          import tempfile
+
+          sys.path.insert(0, os.getcwd())
+
+          from sac_lib.tool_updater import (
+              ToolUpdateError,
+              _pick_asset,
+              _safe_join,
+              get_cached_steamless_executable,
+          )
+
+          release = {
+              "assets": [
+                  {"name": "wrong.zip"},
+                  {"name": "Steamless-v4.3.0-windows.zip"},
+              ]
+          }
+          picked = _pick_asset(release, ["Steamless-v4.3.0-windows.zip"])
+          assert picked["name"].endswith("windows.zip")
+
+          with tempfile.TemporaryDirectory() as root:
+              try:
+                  _safe_join(root, "../escape")
+                  raise AssertionError("archive path traversal was accepted")
+              except ToolUpdateError:
+                  pass
+
+              steamless = os.path.join(root, "steamless")
+              os.makedirs(os.path.join(steamless, "bin"))
+              exe = os.path.join(steamless, "bin", "Steamless.CLI.exe")
+              open(exe, "wb").close()
+              with open(os.path.join(steamless, "metadata.json"), "w", encoding="utf-8") as handle:
+                  json.dump({"executable": os.path.join("bin", "Steamless.CLI.exe")}, handle)
+
+              assert get_cached_steamless_executable(root) == exe
+
+          print("verified tool updater helper regression OK")
+
+      - name: Regression test maintenance CLI
+        shell: pwsh
+        run: |
+          python sac_cli.py --help
+          python sac_cli.py list-installed --json
+
       - name: Exercise portable PE version helper
         run: python -c "import os; from sac_lib.get_file_version import GetFileVersion; print(GetFileVersion(os.path.join(os.environ['WINDIR'], 'System32', 'kernel32.dll')))"
 
