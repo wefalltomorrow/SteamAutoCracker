@@ -126,6 +126,7 @@ def discover_legacy_backups(root, steam_api_backup="steam_api.dll.bak",
 
 def restore_entries(root, entries):
     restored = []
+    removed_created = []
     preserved = []
     skipped = []
 
@@ -162,10 +163,11 @@ def restore_entries(root, entries):
                 sidecar = unique_sidecar(original)
                 shutil.move(original, sidecar)
                 preserved.append(relpath(root, sidecar))
-            restored.append(original_rel)
+                removed_created.append(original_rel)
 
     return {
         "restored": restored,
+        "removed_created": removed_created,
         "preserved": preserved,
         "skipped": skipped,
     }
