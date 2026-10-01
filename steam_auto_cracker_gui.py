@@ -884,6 +884,15 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         configDir = os.path.join(configDir, "files") # "sac_emu/game_ali213/files" for example
 
+        cached_gbe_files = {}
+        if config["Crack"]["SelectedCrack"] == "game_goldberg":
+            for gbe_name in ("steam_api.dll", "steam_api64.dll"):
+                cached_path = get_cached_gbe_dll(get_tool_cache_dir(), gbe_name)
+                if cached_path:
+                    cached_gbe_files[gbe_name] = cached_path
+            if cached_gbe_files:
+                update_logs("\n- Using verified cached GBE_FORK Steam API DLLs for this run.")
+
         # Check if some custom Steamless options have been set up
         steamlessOptions = ""
         try:
@@ -909,7 +918,10 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     #update_logs("\n[[[ Steamless logs ]]]")
                     fileLocation = root_dir + "/" + fileName
                     shutil.move(fileLocation, fileName) # Move the file to our location
-                    steamless_path = get_resource_path(os.path.join("Steamless_CLI", "Steamless.CLI.exe"))
+                    steamless_path = (
+                        get_cached_steamless_executable(get_tool_cache_dir())
+                        or get_resource_path(os.path.join("Steamless_CLI", "Steamless.CLI.exe"))
+                    )
                     if os.name != "nt":
                         update_logs("- Steamless is Windows-only; skipping this executable on the current platform.")
                         shutil.move(fileName, fileLocation)
@@ -1051,7 +1063,10 @@ try: # Handles Python errors to write them to a log file so they can be reported
                         record_change(folder_path, target_path, None)
                         created_count += 1
 
-                    shutil.copyfile(os.path.join(root_dir, fileName), target_path)
+                    source_path = os.path.join(root_dir, fileName)
+                    if fileName in cached_gbe_files:
+                        source_path = cached_gbe_files[fileName]
+                    shutil.copyfile(source_path, target_path)
 
                     if fileName in ("steam_api.dll", "steam_api64.dll"):
                         api_replacements += 1
@@ -1426,7 +1441,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     crackList = { # A list of all selectable cracks
         "game_ali213": ["ALI213 (Game)", "The ALI213 crack is simple and can crack a full game. It will unlock all DLCs and will also prevent the game from connecting to the internet.\nThe game folder can then freely be shared with others as the crack is contained inside the game folder.\nIf it doesn't work, consider using Goldberg instead."],
-        "game_goldberg": ["Goldberg (Game)", "The Goldberg (experimental) crack is similar to ALI213's one.\nIt is open-source, which is better, but might not work with older games, due to SAC's current partial support.\nThis crack will however work better for recent games, where ALI213 could fail.\nInternet connection is blocked, but LAN is enabled."],
+        "game_goldberg": ["GBE_FORK / Goldberg (Game)", "Uses the bundled Goldberg-compatible template. You can optionally download verified, current GBE_FORK Steam API DLLs from Settings; cached DLLs are preferred automatically.\nInternet connection is blocked, but LAN is enabled."],
         "dlc_creamapi": ["CreamAPI (DLC)", "The CreamAPI crack will unlock all DLCs but will not crack the main game. It is meant to be used with bought copies of a game, with your real Steam account.\nOnly use this is you have purchased the game on Steam and want to unlock its DLCs.\nWill not work for most online games, but might exceptionally work with some like Beat Saber."]
     }
 
