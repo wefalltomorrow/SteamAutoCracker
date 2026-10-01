@@ -7,6 +7,25 @@
 
 A maintained best-of fork of BigBoiCJ/SteamAutoCracker, based on upstream 2.2.2 and selectively integrating useful fixes from active forks and upstream pull requests.
 
+## v2.4.0 best-of-all release
+
+v2.4.0-wft.1 folds the strongest maintainable ideas from [SteamAutoCracks/Steam-auto-crack](https://github.com/SteamAutoCracks/Steam-auto-crack) and [harryeffinpotter/Steam-Autocracker-GUI](https://github.com/harryeffinpotter/Steam-Autocracker-GUI) into this fork without replacing its safer restore model or importing unrelated upload/debrid/sharing code.
+
+### Highlights
+
+- **Installed Steam games browser** — discovers Steam libraries from the registry/default paths and `libraryfolders.vdf`, parses `appmanifest_*.acf`, shows AppID/build ID/path, and can fill the selected game automatically.
+- **Automatic selected-folder AppID matching** when the folder is a normal `steamapps/common/<installdir>` game.
+- **Recursive Steam API validation** for nested `steam_api.dll` / `steam_api64.dll` layouts, plus root-drive protection so an entire drive cannot be selected accidentally.
+- **Background Steam metadata lookup** so Store/AppDetails/DLC network work no longer freezes the Tk UI.
+- **Maintained GBE_FORK support** — Settings can download the latest Windows release from `Detanup01/gbe_fork`, verify GitHub's reported size/SHA-256 digest, stage/extract it safely, and prefer the verified x86/x64 DLLs automatically.
+- **Maintained Steamless-KR support** — Settings can download the latest `K0oRui/Steamless-KR` Windows release with the same verification and safe extraction. Cached modern Steamless builds run against the original EXE path in-place and report the real CLI exit code.
+- **Persistent tool cache** beside SAC; optional external tool updates never overwrite the bundled fallback files.
+- **Maintenance CLI** (`steam_auto_cracker_cli.exe` in compiled releases) for installed-game listing, folder validation, metadata diagnostics, safe restore inspection/execution, and verified tool updates.
+- **Existing v2.3.1 restore safety remains intact**: per-folder restore manifests, path-traversal protection, backup overwrite prevention, `.sac-replaced` preservation, and truthful completion summaries.
+
+This release deliberately does **not** import Harry's upload/debrid/1fichier sharing stack, hard-coded crack-file size heuristics, or other unrelated features. The goal is a smaller, auditable SteamAutoCracker rather than combining every line of every project.
+
+
 ### v2.3.1 maintenance improvements
 
 This release focuses on safer file handling and more accurate status reporting:
@@ -22,7 +41,7 @@ This release focuses on safer file handling and more accurate status reporting:
 - Includes the ttkbootstrap compatibility constants in the source itself, so direct Python runs no longer depend on the PyInstaller runtime hook.
 
 
-## Fork release: v2.3.1-wft.1
+## Fork release: v2.4.0-wft.1
 
 > **Previous v2.3.0 hotfix:** fixed the compiled startup crash caused by classic Tk constants missing from the `ttkbootstrap` package alias.
 
@@ -88,6 +107,7 @@ Screenshots from v2.0.0
   - The `tkinter` module, but it should be included in Python by default.
   - As of v2.2.0 GUI, the `tkinterdnd2` module is required as well (v0.4.0+). Install it with `py -m pip install tkinterdnd2`. ([pypi link](https://pypi.org/project/tkinterdnd2/) - [github link](https://github.com/Eliav2/tkinterdnd2))
   - This fork also uses `ttkbootstrap` for Light/Dark/Black themes. Install with `py -m pip install ttkbootstrap`.
+  - `py7zr` is used only when extracting an optional verified GBE_FORK update. Install with `py -m pip install py7zr`.
   - Python 3.10 or newer is recommended. CI currently verifies Python 3.10 and 3.13.
 
 ## Notes about DLCs
@@ -96,6 +116,23 @@ This tool is not able to download those files, you'll have to get a clean versio
 
 You can get clean Steam files for games (and sometimes DLCs) in the [Steam Content Sharing section from cs.rin.ru](https://cs.rin.ru/forum/viewforum.php?f=22)
 
+## Maintenance CLI
+
+Compiled releases include `steam_auto_cracker_cli.exe`. Source users can run the same commands with `python sac_cli.py`.
+
+Examples:
+
+```powershell
+steam_auto_cracker_cli.exe list-installed
+steam_auto_cracker_cli.exe validate "D:\\SteamLibrary\\steamapps\\common\\Example Game"
+steam_auto_cracker_cli.exe metadata 123456
+steam_auto_cracker_cli.exe restore "D:\\Games\\Example"          # dry run
+steam_auto_cracker_cli.exe restore "D:\\Games\\Example" --yes    # perform restore
+steam_auto_cracker_cli.exe update-gbe
+steam_auto_cracker_cli.exe update-steamless
+```
+
+The CLI is intended for diagnostics/maintenance and uses the same safe restore and verified updater modules as the GUI.
 ## Windows build information
 Release builds are produced with [PyInstaller](https://pyinstaller.org/) on GitHub Actions. The one-file executable bundles the `sac_emu`, `Steamless_CLI`, icon, tkinterdnd2 and ttkbootstrap resources required by the GUI.
 
