@@ -27,6 +27,7 @@ pyinstaller --noconfirm --clean --onefile --windowed `
   --add-data "icon_hashtag.ico;." `
   --collect-all tkinterdnd2 `
   --collect-all ttkbootstrap `
+  --collect-all py7zr `
   steam_auto_cracker_gui.py
 ```
 
@@ -56,6 +57,7 @@ The official release also builds the source maintenance CLI:
 ```powershell
 pyinstaller --noconfirm --clean --onefile --console `
   --name steam_auto_cracker_cli `
+  --collect-all py7zr `
   sac_cli.py
 ```
 
