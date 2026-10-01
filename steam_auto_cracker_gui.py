@@ -805,7 +805,9 @@ try: # Handles Python errors to write them to a log file so they can be reported
                 # Create all files
                 for fileName in files:
                     root.update()
-                    if os.path.isfile(os.path.join(dllAbsoluteRelativeLocation, fileName)): # The file already exists in the game, rename it to .bak
+                    target_path = os.path.join(dllAbsoluteRelativeLocation, fileName)
+                    target_existed_before = os.path.isfile(target_path)
+                    if target_existed_before: # The file already exists in the game, rename it to .bak
                         newName = fileName + config["FileNames"]["BakSuffix"]
                         if fileName == "steam_api.dll" or fileName == "steam_api64.dll":
                             if config["Preferences"]["CrackOption"] != "0": # Only create config
@@ -839,8 +841,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     elif fileName == "steam_api.dll" or fileName == "steam_api64.dll": # No existing file, and this file is the steam_api(64).dll one
                         continue # Ignore this file
 
-                    target_path = os.path.join(dllAbsoluteRelativeLocation, fileName)
-                    if not os.path.exists(target_path):
+                    if not target_existed_before:
                         record_change(folder_path, target_path, None)
                         created_count += 1
 
