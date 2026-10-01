@@ -152,6 +152,43 @@ jobs:
           assert "launch compatibility has NOT been verified" in source
           assert "Restore original files" in source
           print("truthful outcome reporting regression OK")
+      - name: Regression test Steamless failure result
+        shell: python
+        run: |
+          from sac_lib.run_result import classify_run_result
+
+          failed = classify_run_result(
+              steam_api_replaced=True,
+              steamless_enabled=True,
+              steamless_attempted=1,
+              steamless_succeeded=0,
+              steamless_failed=1,
+          )
+          assert failed["key"] == "steamless_failed"
+          assert failed["restore_recommended"] is True
+          assert "valid license" in failed["log"]
+          assert failed["status"] == "Steamless failed — DRM removal incomplete"
+
+          partial = classify_run_result(
+              steam_api_replaced=True,
+              steamless_enabled=True,
+              steamless_attempted=2,
+              steamless_succeeded=1,
+              steamless_failed=1,
+          )
+          assert partial["key"] == "partial"
+
+          modified = classify_run_result(
+              steam_api_replaced=True,
+              steamless_enabled=False,
+              steamless_attempted=0,
+              steamless_succeeded=0,
+              steamless_failed=0,
+          )
+          assert modified["key"] == "modified"
+
+          print("Steamless result regression OK")
+
       - name: Regression test Steam library discovery and validation
         shell: python
         run: |
