@@ -12,7 +12,7 @@ import requests
 
 GITHUB_API = "https://api.github.com"
 DEFAULT_HEADERS = {
-    "User-Agent": "SteamAutoCracker-best-of-all",
+    "User-Agent": "SteamAutoCracker-wefalltomorrow",
     "Accept": "application/vnd.github+json",
 }
 

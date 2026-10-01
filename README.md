@@ -1,167 +1,175 @@
-# SteamAutoCracker — wefalltomorrow fork
+# SteamAutoCracker
 
 [![CI](https://github.com/wefalltomorrow/SteamAutoCracker/actions/workflows/ci.yml/badge.svg)](https://github.com/wefalltomorrow/SteamAutoCracker/actions/workflows/ci.yml)
-![GitHub all releases](https://img.shields.io/github/downloads/wefalltomorrow/SteamAutoCracker/total?color=brightgreen&label=Fork%20downloads)
-![GitHub release (latest by date)](https://img.shields.io/github/downloads/wefalltomorrow/SteamAutoCracker/latest/total?color=green&label=Latest%20release)
-![GitHub Repo stars](https://img.shields.io/github/stars/wefalltomorrow/SteamAutoCracker?color=yellow&label=Stars)
+![Downloads](https://img.shields.io/github/downloads/wefalltomorrow/SteamAutoCracker/total?label=Downloads)
+![Latest release](https://img.shields.io/github/downloads/wefalltomorrow/SteamAutoCracker/latest/total?label=Latest%20release)
+![Stars](https://img.shields.io/github/stars/wefalltomorrow/SteamAutoCracker?label=Stars)
 
-A maintained best-of fork of BigBoiCJ/SteamAutoCracker, based on upstream 2.2.2 and selectively integrating useful fixes from active forks and upstream pull requests.
+Maintained fork of [BigBoiCJ/SteamAutoCracker](https://github.com/BigBoiCJ/SteamAutoCracker).
 
-## v2.4.0 best-of-all release
+This keeps the original Python/Tkinter project and adds fixes and features from upstream PRs and other active forks.
 
-v2.4.0-wft.1 folds the strongest maintainable ideas from [SteamAutoCracks/Steam-auto-crack](https://github.com/SteamAutoCracks/Steam-auto-crack) and [harryeffinpotter/Steam-Autocracker-GUI](https://github.com/harryeffinpotter/Steam-Autocracker-GUI) into this fork without replacing its safer restore model or importing unrelated upload/debrid/sharing code.
+## Download
 
-### Highlights
+Get the latest Windows build from [Releases](https://github.com/wefalltomorrow/SteamAutoCracker/releases/latest).
 
-- **Installed Steam games browser** — discovers Steam libraries from the registry/default paths and `libraryfolders.vdf`, parses `appmanifest_*.acf`, shows AppID/build ID/path, can fill the selected game automatically, and supports multi-select batch preflight.
-- **Automatic selected-folder AppID matching** when the folder is a normal `steamapps/common/<installdir>` game.
-- **Recursive Steam API validation** for nested `steam_api.dll` / `steam_api64.dll` layouts, plus root-drive protection so an entire drive cannot be selected accidentally.
-- **Background Steam metadata lookup** so Store/AppDetails/DLC network work no longer freezes the Tk UI.
-- **Maintained GBE_FORK support** — Settings can download the latest Windows release from `Detanup01/gbe_fork`, verify GitHub's reported size/SHA-256 digest, stage/extract it safely, and prefer the verified x86/x64 DLLs automatically.
-- **Maintained Steamless-KR support** — Settings can download the latest `K0oRui/Steamless-KR` Windows release with the same verification and safe extraction. Cached modern Steamless builds run against the original EXE path in-place and report the real CLI exit code. Steamless-KR currently requires the .NET 9 runtime; if the modern tool cannot run or cannot unpack a target, SAC falls back to its bundled compatibility build.
-- **Persistent tool cache** beside SAC; optional external tool updates never overwrite the bundled fallback files.
-- **Maintenance CLI** (`steam_auto_cracker_cli.exe` in compiled releases) for installed-game listing, folder validation, metadata diagnostics, safe restore inspection/execution, and verified tool updates.
-- **Fixed crack-only mode** — the previously broken third crack approach now creates a non-destructive ZIP beside SAC, preserving each detected Steam API directory layout and applying the same AppID/DLC/config substitutions without touching the selected game.
-- **Existing v2.3.1 restore safety remains intact**: per-folder restore manifests, path-traversal protection, backup overwrite prevention, `.sac-replaced` preservation, and truthful completion summaries.
+The ZIP contains:
 
-This release deliberately does **not** import Harry's upload/debrid/1fichier sharing stack, hard-coded crack-file size heuristics, or other unrelated features. The goal is a smaller, auditable SteamAutoCracker rather than combining every line of every project.
-
-
-### v2.3.1 maintenance improvements
-
-This release focuses on safer file handling and more accurate status reporting:
-
-- Adds a **Restore original files** button after selecting a folder.
-- Writes a per-folder restore manifest whenever this release preserves/replaces files.
-- Restoring never deletes the currently modified file: it is moved aside with a `.sac-replaced` suffix before the original backup is restored.
-- Detects legacy `steam_api.dll.bak`, `steam_api64.dll.bak`, and executable backup pairs created by older builds.
-- Refuses to overwrite an existing known-good backup or run another modification pass while restore data is present.
-- Replaces the old unconditional success message with a detailed summary of what actually happened.
-- Explicitly reports **Completed with warnings — launch not verified** when an executable stage does not complete.
-- Adds CI regression coverage for restore manifests, path-traversal protection, truthful completion messages, and the source/compiled ttkbootstrap compatibility path.
-- Includes the ttkbootstrap compatibility constants in the source itself, so direct Python runs no longer depend on the PyInstaller runtime hook.
-
-
-## Fork release: v2.4.0-wft.1
-
-> **Previous v2.3.0 hotfix:** fixed the compiled startup crash caused by classic Tk constants missing from the `ttkbootstrap` package alias.
-
-This release combines the maintenance work from PR #1 and PR #2:
-
-- Light, Dark and Black themes with a monospaced log view.
-- Resizable main window with an expandable, scrollable log pane.
-- Live Steam Store name lookup instead of the obsolete local/GetAppList flow.
-- Robust HTTP retry handling.
-- Defensive Steam AppDetails parsing for upstream issue #124: missing/empty AppID responses no longer raise `KeyError`, and SAC retries once without the `basic` filter before failing cleanly.
-- Portable `pefile` version detection instead of `win32api` / `pywin32`.
-- PyInstaller-aware resource paths and safer writable config/log locations.
-- Safer Steamless path handling.
-- Fork-safe update checks: an upstream release opens in the browser instead of silently replacing this fork.
-- Windows CI on Python 3.10 and 3.13, including a regression test for issue #124.
-- Reproducible Windows release builds through GitHub Actions.
-
-Changes intentionally not copied wholesale include sign-river's Chinese-first defaults/remote DLC server work, codingforfun5435's broken boilerplate Conda workflow, and the experimental RUNE binary-patching implementation from upstream PR #112.
-
-An open-source script that automatically Cracks (removes DRM from) Steam games.
-
-## How to use (easy way)
-- Download the latest compiled fork release from [wefalltomorrow/SteamAutoCracker releases](https://github.com/wefalltomorrow/SteamAutoCracker/releases/latest). The release archive is named `Steam.Auto.Cracker.GUI.vX.X.X-wft.X.zip`.
-- Extract the archive somewhere on your computer.
-- Run `steam_auto_cracker_gui.exe`
-- Select the folder of your game
-- Enter the name of the game to try to crack it! (you can also enter the Steam AppID if you know it)
-  - SAC will automatically attempt to find the AppID using the Name you provided. If it can't, please try entering the AppID yourself.
-  - You can find the AppID in the URL of the game's Steam page (ex: store.steampowered.com/app/-> ***620980*** <-/Beat_Saber/)
+- `steam_auto_cracker_gui.exe`
+- `steam_auto_cracker_cli.exe`
+- README, changelog and license
 
 ## Features
-- Automatically cracks your bought or pirated Steam games. You only need to select the game's folder, and enter the Game Name or AppID.
-  - Cracks **Steam API DRM** by applying and configuring **Steam Emulators** automatically
-  - Cracks **Steam Stub DRM** by applying **Steamless** on executables automatically
-- No Steam account or Steam API key needed
-- Configurable to your liking
-- Option to only unlock DLCs for your bought Steam games instead of cracking them entirely
-- Option to choose your own Steam Emu thanks to a simple list, and simple config template system (default: ALI213)
-  - List of Steam emus included by default:
-    - ALI213 (Game)
-    - Goldberg (Game)
-    - CreamAPI (DLC)
-- Open source, transparent and privacy focused. No hidden analytics or weird things!
-- An opt-in maintained-fork version checker. It checks this fork's GitHub releases and opens the release page instead of silently replacing the executable.
 
-## Screenshots
-Screenshots from v2.0.0
+- Steam API replacement/config generation for ALI213, Goldberg/GBE_FORK and CreamAPI.
+- Steamless support for SteamStub-protected executables.
+- Installed Steam game browser using `libraryfolders.vdf` and `appmanifest_*.acf`.
+- Automatic AppID/build matching for normal Steam install folders.
+- Recursive `steam_api.dll` / `steam_api64.dll` detection.
+- Live Steam Store title/AppID lookup without a Steam Web API key.
+- Optional GBE_FORK and Steamless-KR updates from their official GitHub releases.
+- Restore manifests for files changed by SAC.
+- Crack-only ZIP mode that leaves the selected game folder alone.
+- Light, dark and black themes.
+- CLI tools for installed-game discovery, metadata checks, restore and updater tasks.
 
-<details>
-<summary>Images</summary>
-<img src="https://github.com/BigBoiCJ/SteamAutoCracker/assets/101492671/6b9cd91e-9ff1-42a2-9efb-09586d41dbd3" width=50% height=50%>
-<img src="https://github.com/BigBoiCJ/SteamAutoCracker/assets/101492671/039d5af8-1bad-47ec-b4c0-b164cc0388eb" width=50% height=50%>
-<img src="https://github.com/BigBoiCJ/SteamAutoCracker/assets/101492671/25f0c44c-262f-4358-b694-fb0792bbcf52" width=50% height=50%>
-</details>
+## v2.4.1
 
-## Requirements
-- An internet connection (SAC will do requests to `steampowered.com` to retrieve AppIDs and DLCs)
-- If you use the compiled .exe:
-  - 64 bits Windows
-- If you use the python file (source):
-  - The `requests` module. Install with `py -m pip install requests` or `python -m pip install requests` or `python3 -m pip install requests`
-  - The `pefile` module, used to read executable/DLL version information without requiring pywin32. Install with `py -m pip install pefile` or `python -m pip install pefile`
-  - The `tkinter` module, but it should be included in Python by default.
-  - As of v2.2.0 GUI, the `tkinterdnd2` module is required as well (v0.4.0+). Install it with `py -m pip install tkinterdnd2`. ([pypi link](https://pypi.org/project/tkinterdnd2/) - [github link](https://github.com/Eliav2/tkinterdnd2))
-  - This fork also uses `ttkbootstrap` for Light/Dark/Black themes. Install with `py -m pip install ttkbootstrap`.
-  - `py7zr` is used only when extracting an optional verified GBE_FORK update. Install with `py -m pip install py7zr`.
-  - Python 3.10 or newer is recommended. CI currently verifies Python 3.10 and 3.13.
+v2.4.1 fixes the result shown when Steamless fails to unpack every executable it tried.
 
-## Notes about DLCs
-Some DLCs in some games requires you to download additional files.\
-This tool is not able to download those files, you'll have to get a clean version of them.
+Before this release, a 0/N Steamless result could end with a generic warning after the Steam API files had already been replaced. That made the run look more complete than it was.
 
-You can get clean Steam files for games (and sometimes DLCs) in the [Steam Content Sharing section from cs.rin.ru](https://cs.rin.ru/forum/viewforum.php?f=22)
+Now SAC reports:
 
-## Maintenance CLI
+`Steamless failed — DRM removal incomplete`
 
-Compiled releases include `steam_auto_cracker_cli.exe`. Source users can run the same commands with `python sac_cli.py`.
+It also explains that SteamStub or other launch checks may still be active, warns that Steam may still require a valid license, and changes the restore button to:
 
-Examples:
+`Restore original files (recommended)`
 
-```powershell
+Restore first before trying another method.
+
+## Installed Steam games
+
+Click **Installed Steam games** to scan detected Steam libraries.
+
+SAC reads:
+
+- Steam registry/default install paths
+- `steamapps/libraryfolders.vdf`
+- `steamapps/appmanifest_*.acf`
+
+The browser shows game name, AppID, build ID and path. Selecting a game fills the folder and AppID automatically.
+
+You can also select a folder manually or drag one into the window.
+
+## External tool updates
+
+Settings has manual update buttons for:
+
+- [GBE_FORK](https://github.com/Detanup01/gbe_fork)
+- [Steamless-KR](https://github.com/K0oRui/Steamless-KR)
+
+Downloads go into `tool_cache` next to SAC. The updater checks the release asset size and SHA-256 digest when GitHub provides one, validates the extracted files, and keeps the bundled copies as fallbacks.
+
+Steamless-KR currently needs .NET 9. If the updated build cannot run, SAC falls back to the bundled compatibility version.
+
+## Restore
+
+When SAC changes or creates files it writes `.steamautocracker_restore.json` in the selected game folder.
+
+**Restore original files**:
+
+- restores known backups;
+- removes SAC-created files from their active paths;
+- moves the current modified copy aside with a `.sac-replaced` suffix instead of deleting it;
+- rejects restore entries that escape the selected game folder.
+
+SAC also has limited support for older `.bak` backups created before restore manifests existed.
+
+## Crack-only ZIP
+
+In Settings, set **Crack approach** to:
+
+`Build a crack-only ZIP beside SteamAutoCracker`
+
+This builds a ZIP using the selected emulator/config without writing to the game folder.
+
+## CLI
+
+The Windows release includes `steam_auto_cracker_cli.exe`. Source users can run `python sac_cli.py`.
+
+```text
 steam_auto_cracker_cli.exe list-installed
-steam_auto_cracker_cli.exe validate "D:\\SteamLibrary\\steamapps\\common\\Example Game"
+steam_auto_cracker_cli.exe validate "D:\SteamLibrary\steamapps\common\Example Game"
 steam_auto_cracker_cli.exe metadata 123456
-steam_auto_cracker_cli.exe restore "D:\\Games\\Example"          # dry run
-steam_auto_cracker_cli.exe restore "D:\\Games\\Example" --yes    # perform restore
+steam_auto_cracker_cli.exe restore "D:\Games\Example"
+steam_auto_cracker_cli.exe restore "D:\Games\Example" --yes
 steam_auto_cracker_cli.exe update-gbe
 steam_auto_cracker_cli.exe update-steamless
 ```
 
-The CLI is intended for diagnostics/maintenance and uses the same safe restore and verified updater modules as the GUI.
-## Windows build information
-Release builds are produced with [PyInstaller](https://pyinstaller.org/) on GitHub Actions. The one-file executable bundles the `sac_emu`, `Steamless_CLI`, icon, tkinterdnd2 and ttkbootstrap resources required by the GUI.
+Restore is a dry run unless `--yes` is supplied.
 
-See [BUILDING.md](BUILDING.md) for the exact reproducible build command. The release workflow also publishes a SHA-256 checksum next to the ZIP archive.
+## Requirements
+
+### Compiled build
+
+- 64-bit Windows
+- Internet connection for Steam metadata and optional tool updates
+
+### Running from source
+
+- Python 3.10+
+- dependencies from `requirements.txt`
+- tkinter (normally included with Windows Python)
+
+```powershell
+python -m pip install -r requirements.txt
+python steam_auto_cracker_gui.py
+```
+
+CI runs on Python 3.10 and 3.13.
+
+## Building
+
+See [BUILDING.md](BUILDING.md).
+
+Release builds are made with PyInstaller on GitHub Actions. The workflow builds the GUI and CLI, smoke-tests both, packages them, and writes a SHA-256 file.
+
+## Notes
+
+- Some DLC needs extra game files. SAC only handles configuration/unlock data; it does not download missing DLC files.
+- Replacing Steam API files does not guarantee the game will launch.
+- If Steamless fails to unpack all attempted executables, restore the original files before trying another method.
 
 ## Privacy
-SAC will do requests to `steampowered.com` (Steam's official website) to retrieve AppIDs and DLCs.\
-It is not bannable, and won't cause you problems.
 
-SAC can request this fork's public GitHub latest-release metadata when you manually click "Check for updates", or automatically if you enable update checks in settings. Automatic checking is disabled by default.\
-The fork does not silently replace itself; when a newer maintained release is detected it opens the release page in your browser.
+SAC contacts Steam's public Store endpoints for game metadata.
 
-Nothing is logged by SAC.\
-You can delete the SAC folder at any time and there won't be any leftovers. *
+The update checker uses this fork's public GitHub release metadata. Automatic update checks are off by default.
 
-__* Exception to leftovers:__
-- There will be some leftovers if you use the compiled exe. This is due to how PyInstaller / auto-py-to-exe works. An embedded version of Python and the python script itself will be extracted to the temp-folder of your OS. The folder will be named `_MEIxxxxxx`, where xxxxxx is a random number. You can delete the folder at any time after using the program, as it might not correctly delete itself in all cases. Please check the [pyinstaller documentation](https://pyinstaller.org/en/stable/operating-mode.html#how-the-one-file-program-works) for more infos.
+There is no analytics or telemetry. Local config/log/cache files are stored beside the executable or source checkout.
 
-## Virus detection
-You could get a virus detection on some files. The biggest offender is `sac_emu/game_ali213/files/steam_api.dll`.\
-A lot of cracking tools are detected as malware, either because their behavior is suspect (bypass game protections), or because they have been flagged manually (happens with a lot of tools).\
-If you're suspicious about the legitimacy of the files, just delete the DLLs and use your owns instead.\
-You can discuss with others about the tool in [cs.rin.ru](https://cs.rin.ru/forum/viewtopic.php?f=10&t=120610) or in the GitHub issues.
+PyInstaller one-file builds temporarily extract files to the normal `_MEI...` temp directory while running.
 
-## Thanks
-- Thanks to [atom0s for their Steamless project](https://github.com/atom0s/Steamless)
-- Thanks to [oureveryday for their Steamless fork, supporting command-line](https://github.com/oureveryday/Steamless_CLI) (no longer used)
-- Thanks to the creators of Steam Emus, specifically those who are included: ALI213, Goldberg and deadmau5 (creator of CreamAPI)
-- Thanks to CS.RIN.RU and their members for being helpful and sharing quality uploads
-- Thanks to our contributors that propose code, report issues and give suggestions! The most notable ones will be quoted in releases' notes
-  - Even if you're not credited, that doesn't mean you didn't help! I thank everyone :heart:
+## Credits
+
+Original project: [BigBoiCJ/SteamAutoCracker](https://github.com/BigBoiCJ/SteamAutoCracker)
+
+This fork also reviewed or borrowed ideas from:
+
+- [Sir-Kam/SteamAutoCracker](https://github.com/Sir-Kam/SteamAutoCracker)
+- [sign-river/SteamAutoCracker](https://github.com/sign-river/SteamAutoCracker)
+- [SteamAutoCracks/Steam-auto-crack](https://github.com/SteamAutoCracks/Steam-auto-crack)
+- [harryeffinpotter/Steam-Autocracker-GUI](https://github.com/harryeffinpotter/Steam-Autocracker-GUI)
+
+External projects used/supported:
+
+- [Steamless](https://github.com/atom0s/Steamless)
+- [Steamless-KR](https://github.com/K0oRui/Steamless-KR)
+- [GBE_FORK](https://github.com/Detanup01/gbe_fork)
+- ALI213
+- CreamAPI
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.

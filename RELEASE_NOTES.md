@@ -1,48 +1,30 @@
-# SteamAutoCracker v2.4.0-wft.1
+# SteamAutoCracker v2.4.1-wft.1
 
-Best-of-all maintenance release combining the strongest maintainable ideas from SteamAutoCracks/Steam-auto-crack and harryeffinpotter/Steam-Autocracker-GUI with the safer wefalltomorrow v2.3.x base.
+Small follow-up to v2.4.0.
 
-## Highlights
+## Steamless result handling
 
-- Browse detected installed Steam games instead of manually finding every folder/AppID, with filtering and multi-select batch preflight.
-- Steam library discovery reads the normal Steam registry/default paths, `libraryfolders.vdf`, and `appmanifest_*.acf` files.
-- Selecting a normal Steam install folder can auto-fill its AppID/build metadata.
-- Recursive Steam API DLL validation catches nested game layouts and drive-root selection is rejected.
-- Steam Store metadata work runs in a background worker rather than blocking Tk.
-- Optional GBE_FORK updates are downloaded from the official release, verified against reported asset size/SHA-256, safely extracted, and cached beside SAC.
-- Optional Steamless-KR updates use the same verified flow. Modern cached Steamless runs in-place and SAC records the actual CLI exit result. If .NET 9 is unavailable or the modern tool cannot unpack a target, SAC falls back to the bundled compatibility build.
-- Compiled releases include a new `steam_auto_cracker_cli.exe` diagnostics/maintenance utility.
-- The old broken third crack approach is replaced by a non-destructive crack-only ZIP builder beside SAC.
-- Existing restore safety remains: manifests, traversal protection, no backup overwrite, preserved modified files, and truthful operation summaries.
+SAC now treats a **0/N Steamless result** as an incomplete DRM-removal run.
 
-## Maintenance CLI
+If Steamless was enabled, tried one or more executables, and unpacked none of them, the GUI shows:
 
-`steam_auto_cracker_cli.exe` supports:
+`Steamless failed — DRM removal incomplete`
 
-- `list-installed`
-- `validate <path>`
-- `metadata <appid-or-title>`
-- `restore <path>` (dry-run by default; `--yes` performs it)
-- `update-gbe`
-- `update-steamless`
+The log also explains that SteamStub or other launch checks may still be active and Steam may still require a valid license.
 
-## External tool updates
+If restore data is available, the restore button changes to:
 
-External updates are manual and optional. SAC retains bundled fallbacks. Updated tools are stored in a persistent `tool_cache` folder next to the executable and do not overwrite original game files merely by being downloaded.
+`Restore original files (recommended)`
 
-The updater verifies GitHub's asset size and SHA-256 digest when provided and rejects archive path traversal before extraction.
+Restore first before trying another method.
 
-## What was intentionally not merged
+## Other changes
 
-This release does not import the unrelated upload/debrid/1fichier sharing subsystem, browser automation dependencies, or hard-coded emulator-DLL-size heuristics from other projects. The focus is core SteamAutoCracker reliability, maintainability and useful game-management improvements.
-
-## Verification
-
-CI verifies Python 3.10 and 3.13, source compilation, GUI/theme imports, restore safety, issue #124 parsing, Steam library discovery, nested API validation, updater extraction safety, CLI startup, PE parsing, and compiled Windows GUI startup before publication.
+- Added a CI regression test for the 0/N Steamless case.
+- Cleaned up the README, build docs, release notes and GUI wording.
+- v2.4.0 features are otherwise unchanged.
 
 ## Downloads
 
-- `Steam.Auto.Cracker.GUI.v2.4.0-wft.1.zip` — Windows release containing GUI and maintenance CLI.
-- `Steam.Auto.Cracker.GUI.v2.4.0-wft.1.zip.sha256` — SHA-256 checksum.
-
-Built by GitHub Actions from the tagged `main` source.
+- `Steam.Auto.Cracker.GUI.v2.4.1-wft.1.zip`
+- `Steam.Auto.Cracker.GUI.v2.4.1-wft.1.zip.sha256`

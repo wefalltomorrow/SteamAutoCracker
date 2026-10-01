@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - "best-of-forks-*"
   pull_request:
 
 jobs:
@@ -142,16 +141,58 @@ jobs:
 
           print("restore regression OK")
 
-      - name: Regression test truthful completion status
+      - name: Regression test completion status
         shell: python
         run: |
           from pathlib import Path
 
           source = Path("steam_auto_cracker_gui.py").read_text(encoding="utf-8")
-          assert "The game has been cracked successfully!" not in source
+          assert "classify_run_result" in source
           assert "launch compatibility has NOT been verified" in source
           assert "Restore original files" in source
-          print("truthful outcome reporting regression OK")
+          print("completion status regression OK")
+      - name: Regression test Steamless failure result
+        shell: python
+        run: |
+          import os
+          import sys
+
+          sys.path.insert(0, os.getcwd())
+
+          from sac_lib.run_result import classify_run_result
+
+          failed = classify_run_result(
+              steam_api_replaced=True,
+              steamless_enabled=True,
+              steamless_attempted=1,
+              steamless_succeeded=0,
+              steamless_failed=1,
+          )
+          assert failed["key"] == "steamless_failed"
+          assert failed["restore_recommended"] is True
+          assert "valid license" in failed["log"]
+          assert failed["status"] == "Steamless failed — DRM removal incomplete"
+
+          partial = classify_run_result(
+              steam_api_replaced=True,
+              steamless_enabled=True,
+              steamless_attempted=2,
+              steamless_succeeded=1,
+              steamless_failed=1,
+          )
+          assert partial["key"] == "partial"
+
+          modified = classify_run_result(
+              steam_api_replaced=True,
+              steamless_enabled=False,
+              steamless_attempted=0,
+              steamless_succeeded=0,
+              steamless_failed=0,
+          )
+          assert modified["key"] == "modified"
+
+          print("Steamless result regression OK")
+
       - name: Regression test Steam library discovery and validation
         shell: python
         run: |
