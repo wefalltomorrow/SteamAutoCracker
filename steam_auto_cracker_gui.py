@@ -40,6 +40,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         extract_appdetails_entry,
     )
     from sac_lib.steam_install import (
+        find_game_for_path,
         find_installed_games,
         validate_game_folder,
     )
@@ -219,7 +220,17 @@ try: # Handles Python errors to write them to a log file so they can be reported
         frameGame2.pack()
 
         gameNameEntry.delete(0, tk.END)
-        gameNameEntry.insert(0, suggested_entry or folder_name)
+        if suggested_entry:
+            entry_value = suggested_entry
+        else:
+            manifest_game = find_game_for_path(folder_path)
+            entry_value = manifest_game["appid"] if manifest_game else folder_name
+            if manifest_game:
+                update_logs(
+                    f'\n- Matched selected folder to Steam AppID {manifest_game["appid"]} '
+                    f'({manifest_game["name"]}, build {manifest_game.get("buildid") or "unknown"}).'
+                )
+        gameNameEntry.insert(0, entry_value)
 
         if gameSearchDone:
             frameCrack2.pack()
