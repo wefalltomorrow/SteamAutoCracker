@@ -1565,7 +1565,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     # Let's now create the main window
     root = TkinterDnD.Tk()
-    root.resizable(True, True) # Allow the best-of fork UI to adapt to smaller/larger displays
+    root.resizable(True, True) # Allow the window to be resized.
     root.minsize(800, 600)
     root.title(f"SteamAutoCracker GUI v{VERSION}")
     root.drop_target_register(DND_FILES) # Register the drop target
