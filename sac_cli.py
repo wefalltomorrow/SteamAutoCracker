@@ -6,6 +6,7 @@ import sys
 from sac_lib.restore import (
     discover_legacy_backups,
     load_manifest,
+    remove_manifest,
     restore_entries,
 )
 from sac_lib.steam_install import (
@@ -112,6 +113,8 @@ def cmd_restore(args):
         return 0
 
     result = restore_entries(root, entries)
+    if manifest and not result["skipped"]:
+        remove_manifest(root)
     _print_json(result)
     return 0 if not result["skipped"] else 5
 
