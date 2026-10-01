@@ -7,9 +7,24 @@
 
 A maintained best-of fork of BigBoiCJ/SteamAutoCracker, based on upstream 2.2.2 and selectively integrating useful fixes from active forks and upstream pull requests.
 
-## Fork release: v2.3.0-wft.1
+### v2.3.1 maintenance improvements
 
-> **2026-10-01 hotfix rebuild:** the original compiled asset could exit immediately because `ttkbootstrap` does not expose classic Tk constants such as `BOTH`. The release build now loads a compatibility runtime hook before the GUI starts.
+This release focuses on safer file handling and more accurate status reporting:
+
+- Adds a **Restore original files** button after selecting a folder.
+- Writes a per-folder restore manifest whenever this release preserves/replaces files.
+- Restoring never deletes the currently modified file: it is moved aside with a `.sac-replaced` suffix before the original backup is restored.
+- Detects legacy `steam_api.dll.bak`, `steam_api64.dll.bak`, and executable backup pairs created by older builds.
+- Refuses to overwrite an existing known-good backup or run another modification pass while restore data is present.
+- Replaces the old unconditional success message with a detailed summary of what actually happened.
+- Explicitly reports **Completed with warnings — launch not verified** when an executable stage does not complete.
+- Adds CI regression coverage for restore manifests, path-traversal protection, truthful completion messages, and the source/compiled ttkbootstrap compatibility path.
+- Includes the ttkbootstrap compatibility constants in the source itself, so direct Python runs no longer depend on the PyInstaller runtime hook.
+
+
+## Fork release: v2.3.1-wft.1
+
+> **Previous v2.3.0 hotfix:** fixed the compiled startup crash caused by classic Tk constants missing from the `ttkbootstrap` package alias.
 
 This release combines the maintenance work from PR #1 and PR #2:
 
