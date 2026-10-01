@@ -38,6 +38,7 @@ The release CI checks:
 - preservation of modified files during restore;
 - path-traversal rejection; and
 - absence of the old unconditional success message.
+- compiled Windows GUI startup smoke test before publishing the release asset.
 
 ## Downloads
 
