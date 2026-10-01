@@ -988,7 +988,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         )
         update_logs(result["log"])
         if result["key"] != "no_steam_api":
-            update_logs("\nLaunch compatibility has NOT been verified.")
+            update_logs("\nNote: launch compatibility has NOT been verified.")
         gameFoundStatus.config(text=result["status"])
 
         has_restore_manifest = os.path.isfile(manifest_path(folder_path))
