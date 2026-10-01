@@ -30,14 +30,11 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     import requests
     import configparser
-    import json
     import subprocess
     from sac_lib.get_file_version import GetFileVersion
     from sac_lib.steam_store import (
         SteamStoreClient,
         SteamStoreError,
-        describe_appdetails_problem,
-        extract_appdetails_entry,
     )
     from sac_lib.steam_install import (
         find_game_for_path,
@@ -713,7 +710,6 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
                     # Modern verified Steamless releases can process the original path
                     # in-place, so SAC no longer needs to temporarily move the EXE.
-                    modern_steamless_succeeded = False
                     if cached_steamless:
                         try:
                             result = run_modern_steamless(
@@ -732,7 +728,6 @@ try: # Handles Python errors to write them to a log file so they can be reported
                             unpacked_path = result["output_path"]
                             if result["unpacked"]:
                                 steamless_succeeded += 1
-                                modern_steamless_succeeded = True
                                 update_logs(
                                     f"- Modern Steamless unpacked {fileName} in place "
                                     f"(exit {result['returncode']})."
