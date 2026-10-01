@@ -125,6 +125,21 @@ jobs:
               except ValueError:
                   pass
 
+              outside = os.path.abspath(os.path.join(root, "..", "outside.txt"))
+              try:
+                  record_change(root, outside, None)
+                  raise AssertionError("record_change allowed a path outside the selected root")
+              except ValueError:
+                  pass
+
+              same = {
+                  "original": "game.exe",
+                  "backup": "game.exe",
+              }
+              result = restore_entries(root, [same])
+              assert result["restored"] == []
+              assert result["skipped"][0]["reason"] == "backup path equals original path"
+
           print("restore regression OK")
 
       - name: Regression test truthful completion status
