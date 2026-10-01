@@ -915,15 +915,16 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         root.update()
 
-        dllLocations = []
+        dllLocations = {}
         for root_dir, dirs, files in os.walk(folder_path):
             apiFile = ""
+            files_by_lower = {name.casefold(): name for name in files}
 
             # Use Steamless if configured
             if config["Preferences"]["Steamless"] == "1" and crackListSteamless[config["Crack"]["SelectedCrack"]]:
                 # Run Steamless on every .exe file. If it's not under DRM or not the wrong file, no problem!
                 for fileName in files:
-                    if not fileName.endswith(".exe"):
+                    if not fileName.casefold().endswith(".exe"):
                         continue
                     steamless_attempted += 1
                     update_logs(f"- Attempting to run Steamless on {fileName}")
@@ -1034,46 +1035,43 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     shutil.move(fileName + ".unpacked.exe", fileLocation)
                     root.update()
 
-            if "steam_api.dll" in files:
-                if config["FileNames"]["SteamAPI"] in files:
-                    update_logs("[!] Seems like a file named " + config["FileNames"]["SteamAPI"] + " is present. This could indicate that steam_api.dll has already been cracked! Overwriting steam_api.dll. No backup of the previous steam_api.dll could be created, and the file has been deleted. " + config["FileNames"]["SteamAPI"] + " has been restored.")
-                    os.remove(root_dir + "/steam_api.dll")
-                    shutil.move(root_dir + "/" + config["FileNames"]["SteamAPI"], root_dir + "/steam_api.dll")
-
-                apiFile = root_dir + "/steam_api.dll"
+            steam_api_name = files_by_lower.get("steam_api.dll")
+            if steam_api_name:
+                apiFile = os.path.join(root_dir, steam_api_name)
                 try:
                     apiFileVersion = GetFileVersion(apiFile)
                 except Exception:
-                    update_logs("[!] steam_api.dll: could not retrieve the file version! Seems like the steam_api.dll file has already been cracked! Aborting...")
+                    update_logs(
+                        "[!] steam_api.dll: could not retrieve the file version. "
+                        "The file may already be modified; aborting to preserve restore safety."
+                    )
                     EndCrack()
                     return
 
-                update_logs(f"- Found steam_api.dll in {root_dir}, planning crack application")
+                dllLocations.setdefault(root_dir, apiFileVersion)
+                update_logs(f"- Found {steam_api_name} in {root_dir}, planning crack application")
 
-            if "steam_api64.dll" in files:
-                if config["FileNames"]["SteamAPI64"] in files:
-                    update_logs("[!] Seems like a file named " + config["FileNames"]["SteamAPI64"] + " is present. This could indicate that steam_api64.dll has already been cracked! Overwriting steam_api64.dll. No backup of the previous steam_api64.dll could be created, and the file has been deleted. " + config["FileNames"]["SteamAPI64"] + " has been restored.")
-                    os.remove(root_dir + "/steam_api64.dll")
-                    shutil.move(root_dir + "/" + config["FileNames"]["SteamAPI64"], root_dir + "/steam_api64.dll")
-
-                apiFile = root_dir + "/steam_api64.dll"
+            steam_api64_name = files_by_lower.get("steam_api64.dll")
+            if steam_api64_name:
+                apiFile = os.path.join(root_dir, steam_api64_name)
                 try:
                     apiFileVersion = GetFileVersion(apiFile)
                 except Exception:
-                    update_logs("[!] steam_api64.dll: could not retrieve the file version! Seems like the steam_api64.dll file has already been cracked! Aborting...")
+                    update_logs(
+                        "[!] steam_api64.dll: could not retrieve the file version. "
+                        "The file may already be modified; aborting to preserve restore safety."
+                    )
                     EndCrack()
                     return
 
-                update_logs(f"- Found steam_api64.dll in {root_dir}, planning crack application")
+                dllLocations.setdefault(root_dir, apiFileVersion)
+                update_logs(f"- Found {steam_api64_name} in {root_dir}, planning crack application")
 
             if apiFile != "":
-                if root_dir not in dllLocations:
-                    dllLocations.append(root_dir)
-
                 cracked = True
                 root.update()
 
-        for dllCurrentLocation in dllLocations:
+        for dllCurrentLocation, apiFileVersion in dllLocations.items():
             for root_dir, dirs, files in os.walk(configDir):
                 relativeRootDir = root_dir[len(configDir) + 1:]
                 dllAbsoluteRelativeLocation = os.path.join(dllCurrentLocation, relativeRootDir)
