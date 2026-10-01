@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - "best-of-forks-*"
   pull_request:
 
 jobs:
@@ -142,7 +141,7 @@ jobs:
 
           print("restore regression OK")
 
-      - name: Regression test truthful completion status
+      - name: Regression test completion status
         shell: python
         run: |
           from pathlib import Path
@@ -151,7 +150,7 @@ jobs:
           assert "The game has been cracked successfully!" not in source
           assert "launch compatibility has NOT been verified" in source
           assert "Restore original files" in source
-          print("truthful outcome reporting regression OK")
+          print("completion status regression OK")
       - name: Regression test Steamless failure result
         shell: python
         run: |
