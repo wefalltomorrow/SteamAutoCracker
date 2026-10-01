@@ -44,6 +44,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         validate_game_folder,
     )
     from sac_lib.background import run_background
+    from sac_lib.steamless_runner import run_modern_steamless
     from sac_lib.tool_updater import (
         get_cached_gbe_dll,
         get_cached_steamless_executable,
@@ -918,22 +919,81 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     root.update()
                     #update_logs("\n[[[ Steamless logs ]]]")
                     fileLocation = root_dir + "/" + fileName
-                    shutil.move(fileLocation, fileName) # Move the file to our location
+                    cached_steamless = get_cached_steamless_executable(get_tool_cache_dir())
                     steamless_path = (
-                        get_cached_steamless_executable(get_tool_cache_dir())
+                        cached_steamless
                         or get_resource_path(os.path.join("Steamless_CLI", "Steamless.CLI.exe"))
                     )
                     if os.name != "nt":
                         update_logs("- Steamless is Windows-only; skipping this executable on the current platform.")
-                        shutil.move(fileName, fileLocation)
                         root.update()
                         continue
-                    subprocess.call(f'"{steamless_path}" {steamlessOptions}"{fileName}"', shell=True, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
-                    #update_logs("[[[ -------------- ]]]\n")
 
-                    # Check if the game was NOT unpacked
+                    # Modern verified Steamless releases can process the original path
+                    # in-place, so SAC no longer needs to temporarily move the EXE.
+                    if cached_steamless:
+                        try:
+                            result = run_modern_steamless(
+                                cached_steamless,
+                                fileLocation,
+                                steamlessOptions.strip(),
+                            )
+                        except Exception as exc:
+                            steamless_failed += 1
+                            update_logs(f"- Steamless failed on {fileName}: {exc}")
+                            root.update()
+                            continue
+
+                        unpacked_path = result["output_path"]
+                        if not result["unpacked"]:
+                            steamless_failed += 1
+                            detail = (result["stderr"] or result["stdout"]).strip()
+                            update_logs(
+                                f"- Steamless did not unpack {fileName} "
+                                f"(exit {result['returncode']})."
+                            )
+                            if detail:
+                                update_logs("\n  " + detail.splitlines()[-1])
+                            root.update()
+                            continue
+
+                        steamless_succeeded += 1
+                        update_logs(
+                            f"- Steamless unpacked {fileName} in place "
+                            f"(exit {result['returncode']})."
+                        )
+
+                        if config["FileNames"]["GameEXE"] != "":
+                            exe_backup = fileLocation + config["FileNames"]["GameEXE"]
+                            if os.path.exists(exe_backup):
+                                update_logs(
+                                    f"[!] Refusing to overwrite existing executable backup: {exe_backup}. "
+                                    "Restore originals first."
+                                )
+                                os.remove(unpacked_path)
+                                steamless_succeeded -= 1
+                                steamless_failed += 1
+                                root.update()
+                                continue
+                            shutil.move(fileLocation, exe_backup)
+                            record_change(folder_path, fileLocation, exe_backup)
+                            backup_count += 1
+                        else:
+                            os.remove(fileLocation)
+
+                        shutil.move(unpacked_path, fileLocation)
+                        root.update()
+                        continue
+
+                    # Legacy bundled Steamless path retained as a compatibility fallback.
+                    shutil.move(fileLocation, fileName)
+                    subprocess.call(
+                        f'"{steamless_path}" {steamlessOptions}"{fileName}"',
+                        shell=True,
+                        creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+                    )
+
                     if not os.path.isfile(fileName + ".unpacked.exe"):
-                        # Move back the original game's exe since it didn't change
                         steamless_failed += 1
                         update_logs("- Steamless did not produce an unpacked executable for " + fileName + ".")
                         shutil.move(fileName, fileLocation)
@@ -943,7 +1003,6 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     steamless_succeeded += 1
                     update_logs(f"- Steamless produced an unpacked executable for {fileName}")
                     if config["FileNames"]["GameEXE"] != "":
-                        # Rename and move back the original game's exe
                         exe_backup = fileLocation + config["FileNames"]["GameEXE"]
                         if os.path.exists(exe_backup):
                             update_logs(
@@ -960,9 +1019,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
                         record_change(folder_path, fileLocation, exe_backup)
                         backup_count += 1
                     else:
-                        # Delete the original game's exe
                         os.remove(fileName)
-                    # Rename and move the unpacked exe to the game's directory
                     shutil.move(fileName + ".unpacked.exe", fileLocation)
                     root.update()
 
