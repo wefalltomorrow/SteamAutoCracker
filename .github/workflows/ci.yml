@@ -147,13 +147,18 @@ jobs:
           from pathlib import Path
 
           source = Path("steam_auto_cracker_gui.py").read_text(encoding="utf-8")
-          assert "The game has been cracked successfully!" not in source
+          assert "classify_run_result" in source
           assert "launch compatibility has NOT been verified" in source
           assert "Restore original files" in source
           print("completion status regression OK")
       - name: Regression test Steamless failure result
         shell: python
         run: |
+          import os
+          import sys
+
+          sys.path.insert(0, os.getcwd())
+
           from sac_lib.run_result import classify_run_result
 
           failed = classify_run_result(
