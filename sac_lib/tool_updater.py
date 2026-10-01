@@ -140,25 +140,37 @@ def steamless_cache_dir(cache_root):
     return os.path.join(cache_root, "steamless")
 
 
+def _read_metadata(path):
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def get_cached_gbe_metadata(cache_root):
+    return _read_metadata(os.path.join(gbe_cache_dir(cache_root), "metadata.json"))
+
+
+def get_cached_steamless_metadata(cache_root):
+    return _read_metadata(os.path.join(steamless_cache_dir(cache_root), "metadata.json"))
+
+
 def get_cached_gbe_dll(cache_root, filename):
     path = os.path.join(gbe_cache_dir(cache_root), filename)
     return path if os.path.isfile(path) else None
 
 
 def get_cached_steamless_executable(cache_root):
-    metadata_path = os.path.join(steamless_cache_dir(cache_root), "metadata.json")
-    if not os.path.isfile(metadata_path):
+    metadata = get_cached_steamless_metadata(cache_root)
+    if not metadata:
         return None
-    try:
-        with open(metadata_path, "r", encoding="utf-8") as handle:
-            metadata = json.load(handle)
-        exe = metadata.get("executable")
-        if exe:
-            path = os.path.join(steamless_cache_dir(cache_root), exe)
-            if os.path.isfile(path):
-                return path
-    except (OSError, ValueError, TypeError):
-        return None
+    exe = metadata.get("executable")
+    if exe:
+        path = os.path.join(steamless_cache_dir(cache_root), exe)
+        if os.path.isfile(path):
+            return path
     return None
 
 
