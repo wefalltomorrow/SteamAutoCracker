@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - "publish-v*"
+      - "build-smoke-*"
 
 permissions:
   contents: write
@@ -20,10 +21,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Check out main release source
+      - name: Check out release source
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ startsWith(github.ref_name, 'build-smoke-') && github.ref_name || 'main' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,11 +61,32 @@ jobs:
             --add-data "icon_hashtag.ico;." `
             --collect-all tkinterdnd2 `
             --collect-all ttkbootstrap `
+            --collect-all py7zr `
             --runtime-hook ".github/runtime_hooks/ttkbootstrap_tk_constants.py" `
             steam_auto_cracker_gui.py
 
           if (-not (Test-Path "dist\steam_auto_cracker_gui.exe")) {
             throw "PyInstaller did not produce dist\steam_auto_cracker_gui.exe"
+          }
+
+      - name: Build maintenance CLI
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --console `
+            --name steam_auto_cracker_cli `
+            --collect-all py7zr `
+            sac_cli.py
+
+          if (-not (Test-Path "dist\steam_auto_cracker_cli.exe")) {
+            throw "PyInstaller did not produce dist\steam_auto_cracker_cli.exe"
+          }
+
+      - name: Smoke test maintenance CLI
+        shell: pwsh
+        run: |
+          & "dist\steam_auto_cracker_cli.exe" --help
+          if ($LASTEXITCODE -ne 0) {
+            throw "Maintenance CLI smoke test failed."
           }
 
       - name: Smoke test compiled GUI startup
@@ -103,6 +125,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "release-package" | Out-Null
           Copy-Item "dist\steam_auto_cracker_gui.exe" "release-package\steam_auto_cracker_gui.exe"
+          Copy-Item "dist\steam_auto_cracker_cli.exe" "release-package\steam_auto_cracker_cli.exe"
           Copy-Item "README.md" "release-package\README.md"
           Copy-Item "LICENSE" "release-package\LICENSE"
           Copy-Item "CHANGELOG.md" "release-package\CHANGELOG.md"

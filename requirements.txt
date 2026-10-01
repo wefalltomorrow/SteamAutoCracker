@@ -2,3 +2,4 @@ requests
 pefile
 tkinterdnd2
 ttkbootstrap
+py7zr

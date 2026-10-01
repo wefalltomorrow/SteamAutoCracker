@@ -30,12 +30,27 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     import requests
     import configparser
-    import json
     import subprocess
     from sac_lib.get_file_version import GetFileVersion
     from sac_lib.steam_store import (
-        describe_appdetails_problem,
-        extract_appdetails_entry,
+        SteamStoreClient,
+        SteamStoreError,
+    )
+    from sac_lib.steam_install import (
+        find_game_for_path,
+        find_installed_games,
+        validate_game_folder,
+    )
+    from sac_lib.background import run_background
+    from sac_lib.package_builder import build_crack_only_archive
+    from sac_lib.steamless_runner import run_modern_steamless
+    from sac_lib.tool_updater import (
+        get_cached_gbe_dll,
+        get_cached_gbe_metadata,
+        get_cached_steamless_executable,
+        get_cached_steamless_metadata,
+        update_gbe_fork,
+        update_steamless,
     )
     from sac_lib.restore import (
         discover_legacy_backups,
@@ -50,22 +65,16 @@ try: # Handles Python errors to write them to a log file so they can be reported
     from sys import exit
     import re
     import webbrowser
-    from difflib import SequenceMatcher
     import typing
 
-    VERSION = "2.3.1-wft.1"
+    VERSION = "2.4.0-wft.1"
 
     RETRY_DELAY = 15 # Delay in seconds before retrying a failed request. (default, can be modified in config.ini)
     RETRY_MAX = 30 # Number of failed tries (includes the first try) after which SAC will stop trying and quit. (default, can be modified in config.ini)
 
-    HIGH_DLC_WARNING = 125
-
     folder_path = ""
     appID = 0
     gameSearchDone = False
-
-    STATE_FindingInAppList = False
-    STATE_UpdatingAppList = False
 
     EXTS_TO_REPLACE = (".txt", ".ini", ".cfg")
 
@@ -78,10 +87,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
     GITHUB_RAWHOST = "raw.githubusercontent.com"
     GITHUB_APIHOST = "api.github.com"
     GITHUB_ACCREPOSTR = "BigBoiCJ/SteamAutoCracker"
-    GITHUB_ALLRELEASESJSON = f"https://{GITHUB_APIHOST}/repos/{GITHUB_ACCREPOSTR}/releases"
-    GITHUB_LATESTRELEASESJSON = f"{GITHUB_ALLRELEASESJSON}/latest"
-    GITHUB_LATESTVERSIONJSON = f"https://{GITHUB_RAWHOST}/{GITHUB_ACCREPOSTR}/autoupdater/latestversion.json"
-    GITHUB_AUTOUPDATER = f"https://{GITHUB_RAWHOST}/{GITHUB_ACCREPOSTR}/autoupdater/steam_auto_cracker_gui_autoupdater.exe"
+    FORK_REPO = "wefalltomorrow/SteamAutoCracker"
+    FORK_LATESTRELEASEJSON = f"https://{GITHUB_APIHOST}/repos/{FORK_REPO}/releases/latest"
 
     def get_app_dir():
         """Directory for writable user files such as config and logs."""
@@ -97,9 +104,14 @@ try: # Handles Python errors to write them to a log file so they can be reported
     def get_user_path(filename):
         return os.path.join(get_app_dir(), filename)
 
+    def get_tool_cache_dir():
+        path = os.path.join(get_app_dir(), "tool_cache")
+        os.makedirs(path, exist_ok=True)
+        return path
+
     def version_key(value):
         parts = [int(part) for part in re.findall(r"\d+", str(value or ""))]
-        return tuple((parts + [0, 0, 0])[:3])
+        return tuple(parts or [0])
 
     def OnTkinterError(exc, val, tb):
         # Handle Tkinter Python errors
@@ -163,56 +175,246 @@ try: # Handles Python errors to write them to a log file so they can be reported
                 f"SACRequest: {self.name} failed after {max_tries} tries"
             ) from last_error
 
+    def _apply_folder_selection(folder_path_temp, suggested_entry=None):
+        global folder_path
+        global last_selected_folder
+
+        validation = validate_game_folder(folder_path_temp)
+        if not validation["valid"]:
+            update_logs("\n[!] " + validation["error"])
+            try:
+                messagebox.showerror("Invalid game folder", validation["error"])
+            except Exception:
+                pass
+            return False
+
+        folder_path = os.path.abspath(folder_path_temp)
+        last_selected_folder = os.path.dirname(folder_path)
+        config["Preferences"]["last_selected_folder"] = last_selected_folder
+        UpdateConfig()
+
+        folder_name = os.path.basename(folder_path)
+        update_logs(f"\nSelected folder: {folder_path}")
+
+        api_files = validation.get("steam_api_files") or []
+        if api_files:
+            update_logs(
+                f"\n- Found {len(api_files)} Steam API DLL"
+                + ("s" if len(api_files) != 1 else "")
+                + " under the selected folder."
+            )
+        elif validation.get("warning"):
+            update_logs("\n[!] " + validation["warning"])
+
+        selectedFolderLabel.config(text=f"Selected folder:\n{folder_path}")
+        selectedFolderLabel.pack()
+        restoreFilesButton.pack(pady=(0, 10))
+        frameGame2.pack()
+
+        gameNameEntry.delete(0, tk.END)
+        if suggested_entry:
+            entry_value = suggested_entry
+        else:
+            manifest_game = find_game_for_path(folder_path)
+            entry_value = manifest_game["appid"] if manifest_game else folder_name
+            if manifest_game:
+                update_logs(
+                    f'\n- Matched selected folder to Steam AppID {manifest_game["appid"]} '
+                    f'({manifest_game["name"]}, build {manifest_game.get("buildid") or "unknown"}).'
+                )
+        gameNameEntry.insert(0, entry_value)
+
+        if gameSearchDone:
+            frameCrack2.pack()
+        return True
+
     def handle_folder_selection(event=None):
         global folder_path
         global last_selected_folder
-        last_selected_folder = config["Preferences"].get("last_selected_folder", "")
-        # Reset and hide UI elements related to folder selection and game cracking
+
         def reset_folder_selection_ui():
             selectedFolderLabel.config(text="")
             selectedFolderLabel.pack_forget()
             restoreFilesButton.pack_forget()
             frameGame2.pack_forget()
-            frameCrack2.pack_forget() # Hide the crack frame
+            frameCrack2.pack_forget()
 
-        # Determine the folder path based on the event type
-        if event:  # Handling drag and drop
-            folder_path_temp = event.data.strip("{}").replace("\\", "/") # Returns the directory with no "/" at the end
-        else:  # Handling button click
+        if event:
+            folder_path_temp = event.data.strip("{}").replace("\\", "/")
+        else:
             initial_dir = "/"
-            if last_selected_folder != "" and os.path.isdir(last_selected_folder):
+            last_selected_folder = config["Preferences"].get("last_selected_folder", "")
+            if last_selected_folder and os.path.isdir(last_selected_folder):
                 initial_dir = last_selected_folder
-            folder_path_temp = filedialog.askdirectory(initialdir=initial_dir) # Returns the directory with no "/" at the end
+            folder_path_temp = filedialog.askdirectory(initialdir=initial_dir)
             if isinstance(folder_path_temp, tuple):
                 folder_path_temp = folder_path_temp[0] if folder_path_temp else ""
 
-        if os.path.isdir(folder_path_temp):
-            folder_path = folder_path_temp
-            # Update the last dropped folder for future use
-            last_selected_folder = os.path.dirname(folder_path) # If no "/" at the end, returns the parent directory
-            config["Preferences"]["last_selected_folder"] = last_selected_folder
-            UpdateConfig()
-            folder_name = os.path.basename(folder_path) # Gets the name of the folder ("C:/Something/Games/Hello" will return "Hello")
+        if folder_path_temp and _apply_folder_selection(folder_path_temp):
+            return
 
-            # Update UI elements with the selected folder information
-            update_logs(f"\nSelected folder: {folder_path}")
-            selectedFolderLabel.config(text=f"Selected folder:\n{folder_path}")
-            selectedFolderLabel.pack()
-            restoreFilesButton.pack(pady=(0, 10))
-            frameGame2.pack()
+        if not folder_path_temp:
+            update_logs("\nNo folder selected")
+        folder_path = ""
+        reset_folder_selection_ui()
 
-            # Update the game name entry with the folder name
-            gameNameEntry.delete(0, tk.END) # Removes the content of the Entry element starting from index 0 to the end
-            gameNameEntry.insert(0, folder_name) # Inserts the name of the folder in the Entry element at the start of it (index 0)
+    def BrowseInstalledGames():
+        installedGamesButton.config(state=tk.DISABLED)
+        installedGamesStatus.config(text="Scanning Steam libraries...")
 
-            # Show crack frame if game search is done
-            if gameSearchDone:
-                frameCrack2.pack()
-        else:
-            # Handle invalid folder selection
-            update_logs("\nNo valid folder selected")
-            folder_path = ""
-            reset_folder_selection_ui()
+        def worker():
+            return find_installed_games()
+
+        def success(games):
+            installedGamesStatus.config(text=f"Found {len(games)} installed Steam games")
+            if not games:
+                messagebox.showinfo(
+                    "Installed Steam games",
+                    "No installed Steam games were found in the detected Steam libraries.",
+                )
+                return
+
+            top = tk.Toplevel(root)
+            top.title(f"SteamAutoCracker GUI v{VERSION} - Installed Steam games")
+            top.geometry("900x560")
+            top.minsize(700, 420)
+
+            ttk.Label(top, text="Installed Steam games", font=FONT2, padding=6).pack(
+                anchor="center", pady=(8, 0)
+            )
+
+            filter_var = tk.StringVar()
+            filter_entry = tk.Entry(top, textvariable=filter_var, font=FONT_APP_ENTRY)
+            filter_entry.pack(fill="x", padx=12, pady=(8, 8))
+
+            frame = ttk.Frame(top)
+            frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 8))
+
+            columns = ("name", "appid", "build", "path")
+            tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="extended")
+            tree.heading("name", text="Game")
+            tree.heading("appid", text="AppID")
+            tree.heading("build", text="Build ID")
+            tree.heading("path", text="Install path")
+            tree.column("name", width=230)
+            tree.column("appid", width=80, anchor="center")
+            tree.column("build", width=90, anchor="center")
+            tree.column("path", width=430)
+
+            yscroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=yscroll.set)
+            tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            yscroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+            item_map = {}
+
+            def populate(*_):
+                query = filter_var.get().strip().casefold()
+                for item in tree.get_children():
+                    tree.delete(item)
+                item_map.clear()
+
+                for game in games:
+                    haystack = (
+                        game["name"] + " " + game["appid"] + " " + game["path"]
+                    ).casefold()
+                    if query and query not in haystack:
+                        continue
+                    item = tree.insert(
+                        "",
+                        "end",
+                        values=(
+                            game["name"],
+                            game["appid"],
+                            game.get("buildid", ""),
+                            game["path"],
+                        ),
+                    )
+                    item_map[item] = game
+
+            def choose(*_):
+                selected = tree.selection()
+                if not selected:
+                    return
+                game = item_map.get(selected[0])
+                if not game:
+                    return
+                if _apply_folder_selection(game["path"], game["appid"]):
+                    update_logs(
+                        f'\n- Selected installed Steam game "{game["name"]}" '
+                        f'(AppID {game["appid"]}, build {game.get("buildid") or "unknown"}).'
+                    )
+                    top.destroy()
+
+            def preflight_selected():
+                selected = tree.selection()
+                games_to_check = [
+                    item_map[item] for item in selected if item in item_map
+                ]
+                if not games_to_check:
+                    messagebox.showinfo(
+                        "Batch preflight",
+                        "Select one or more installed games first.",
+                        parent=top,
+                    )
+                    return
+
+                def worker():
+                    results = []
+                    for game in games_to_check:
+                        validation = validate_game_folder(game["path"])
+                        results.append((game, validation))
+                    return results
+
+                def success(results):
+                    lines = []
+                    valid_count = 0
+                    api_count = 0
+                    for game, validation in results:
+                        if validation["valid"]:
+                            valid_count += 1
+                        count = len(validation.get("steam_api_files") or [])
+                        api_count += count
+                        status = (
+                            f"{count} Steam API DLL(s)"
+                            if validation["valid"]
+                            else validation["error"]
+                        )
+                        lines.append(
+                            f'{game["name"]} (AppID {game["appid"]}): {status}'
+                        )
+
+                    summary = (
+                        f"{valid_count}/{len(results)} folders passed validation; "
+                        f"{api_count} Steam API DLL(s) found.\n\n"
+                        + "\n".join(lines)
+                    )
+                    messagebox.showinfo("Batch preflight", summary, parent=top)
+
+                def failure(exc, details):
+                    update_logs(f"\n[!] Batch preflight failed: {exc}\n{details}")
+
+                run_background(root, worker, success, failure)
+
+            filter_var.trace_add("write", populate)
+            tree.bind("<Double-1>", choose)
+            populate()
+
+            buttons = ttk.Frame(top)
+            buttons.pack(pady=(0, 10))
+            ttk.Button(buttons, text="Use selected game", command=choose).grid(row=0, column=0, padx=5)
+            ttk.Button(buttons, text="Preflight selected", command=preflight_selected).grid(row=0, column=1, padx=5)
+            ttk.Button(buttons, text="Close", command=top.destroy).grid(row=0, column=2, padx=5)
+            filter_entry.focus_set()
+
+        def failure(exc, details):
+            installedGamesStatus.config(text="Steam library scan failed")
+            update_logs(f"\n[!] Installed-game scan failed: {exc}\n{details}")
+
+        def finish():
+            installedGamesButton.config(state=tk.NORMAL)
+
+        run_background(root, worker, success, failure, finish)
 
     def RestoreOriginalFiles():
         if not folder_path or not os.path.isdir(folder_path):
@@ -249,6 +451,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
             return
 
         selectFolderButton.config(state=tk.DISABLED)
+        installedGamesButton.config(state=tk.DISABLED)
         searchGameButton.config(state=tk.DISABLED)
         selectCrackButton.config(state=tk.DISABLED)
         crackGameButton.config(state=tk.DISABLED)
@@ -292,6 +495,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
             update_logs(f"\n[!] Restore failed: {exc}")
         finally:
             selectFolderButton.config(state=tk.NORMAL)
+            installedGamesButton.config(state=tk.NORMAL)
             searchGameButton.config(state=tk.NORMAL)
             selectCrackButton.config(state=tk.NORMAL)
             crackGameButton.config(state=tk.NORMAL)
@@ -300,342 +504,106 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
 
     def update_logs(log_message):
-        # Get current content
-        current_logs = logs_text.get("1.0", tk.END)
-
-        logs_text.config(state=tk.NORMAL)  # Enables modification (needed to add content)
-        # Delete the current content
-        logs_text.delete("1.0", tk.END)
-
-        # Insert the new message at the end with a linebreak
-        logs_text.insert(tk.END, current_logs + log_message)
-
-        # Scroll the widget to the bottom
-        logs_text.yview_moveto(1.0)
-
-        # Focus on the end
+        # Append directly instead of re-reading/deleting/reinserting the entire
+        # Text widget for every message. Long cracking runs can emit hundreds of
+        # log entries, so the old behavior became progressively more expensive.
+        logs_text.config(state=tk.NORMAL)
+        logs_text.insert(tk.END, str(log_message))
         logs_text.see(tk.END)
-        logs_text.config(state=tk.DISABLED)  # Disables modification (prevents the user from writing inside the field)
+        logs_text.config(state=tk.DISABLED)
 
     def search_game():
-        searchGameButton.config(state=tk.DISABLED) # Prevents the user from starting multiple searches at the same time
-        frameCrack2.pack_forget() # Hide the crack frame
-        global gameSearchDone
-        gameSearchDone = False
-
-        gameFoundStatus.config(text=f"")
-        # Disable the ability to change the selected folder
-        selectFolderButton.config(state=tk.DISABLED)
-        updateAppListButton.grid_forget()
-        root.update()
-
-        global appID
-        appID = 0
-        if gameNameEntry.get() == "":
+        query = gameNameEntry.get().strip()
+        if not query:
             update_logs("\n[!] Please enter a valid Name or AppID")
-            searchGameButton.config(state=tk.NORMAL)  # Re-enable the ability to search the game
-            selectFolderButton.config(state=tk.NORMAL) # Re-enable the ability to change the selected folder
             return
 
-        try:
-            appID = int(gameNameEntry.get())
-        except:
-            appID = FindInAppList(gameNameEntry.get())
+        searchGameButton.config(state=tk.DISABLED)
+        selectFolderButton.config(state=tk.DISABLED)
+        installedGamesButton.config(state=tk.DISABLED)
+        frameCrack2.pack_forget()
 
-        if appID != 0 and RetrieveGame(): # On success
-            # We are now on step 3
-            gameSearchDone = True
-            frameCrack2.pack() # Show the crack frame
-            searchGameButton.config(state=tk.NORMAL) # Re-enable the ability to search the game
-            selectFolderButton.config(state=tk.NORMAL) # Re-enable the ability to change the selected folder
-        else:
-            searchGameButton.config(state=tk.NORMAL) # Re-enable the ability to search the game
-            selectFolderButton.config(state=tk.NORMAL) # Re-enable the ability to change the selected folder
-
-    def _normalize_game_name(value):
-        value = str(value or "").casefold()
-        return " ".join("".join(ch if ch.isalnum() else " " for ch in value).split())
-
-    def _game_name_score(target, candidate):
-        target_norm = _normalize_game_name(target)
-        candidate_norm = _normalize_game_name(candidate)
-        if not target_norm or not candidate_norm:
-            return 0.0
-        if target_norm == candidate_norm:
-            return 1.0
-
-        score = SequenceMatcher(None, target_norm, candidate_norm).ratio()
-        if target_norm in candidate_norm or candidate_norm in target_norm:
-            score = max(score, 0.80)
-        return score
-
-    def FindInAppList(appName):
-        update_logs("\nSearching the live Steam Store index...")
-        gameFoundStatus.config(text="Searching Steam Store...")
-        root.update()
+        global gameSearchDone
+        gameSearchDone = False
+        gameFoundStatus.config(text="Retrieving Steam metadata...")
 
         try:
-            req = SACRequest(
-                "https://store.steampowered.com/api/storesearch/",
-                "SearchGame",
-                params={"term": appName, "cc": "US", "l": "english"},
-            ).req
-            data = req.json()
-        except Exception as exc:
-            update_logs(f"[!] Steam Store search failed: {exc}")
-            gameFoundStatus.config(text="Search failed")
-            return 0
+            retry_max = max(1, min(int(config["Advanced"]["RetryMax"]), 10))
+            retry_delay = max(0.5, min(float(config["Advanced"]["RetryDelay"]), 5.0))
+        except Exception:
+            retry_max = 5
+            retry_delay = 2.0
 
-        items = data.get("items", []) if isinstance(data, dict) else []
-        candidates = [
-            item for item in items
-            if isinstance(item, dict) and item.get("id") is not None and item.get("name")
-        ]
-
-        if not candidates:
-            update_logs("[!] The app was not found. Try the exact Steam name or enter the AppID.")
-            gameFoundStatus.config(text="App not found!")
-            updateAppListButton.grid(row=0, column=2, padx=(10, 0))
-            return 0
-
-        best = max(candidates, key=lambda item: _game_name_score(appName, item["name"]))
-        best_score = _game_name_score(appName, best["name"])
-
-        if best_score < 0.45:
-            update_logs("[!] No sufficiently close Steam Store match was found. Try entering the AppID.")
-            gameFoundStatus.config(text="App not found!")
-            updateAppListButton.grid(row=0, column=2, padx=(10, 0))
-            return 0
-
-        update_logs(f'- Matched "{appName}" to "{best["name"]}" (AppID: {best["id"]})')
-        return int(best["id"])
-
-    def UpdateAppList():
-        updateAppListButton.grid_forget()
-        update_logs(
-            "\nSAC now searches the live Steam Store index, so there is no local App List to update."
-        )
-        gameFoundStatus.config(text="Using live Steam Store search")
-
-    def RetrieveAppDetails(appID: int, request_name: str, verbose: bool = False):
-        """
-        Retrieve one Steam Store AppDetails entry safely.
-
-        Steam occasionally returns valid JSON that does not contain the requested
-        AppID key. The old code indexed that key directly and crashed with
-        KeyError (upstream issue #124). Try the small 'basic' response first,
-        then retry once without the filter before failing gracefully.
-        """
-        app_id = str(appID)
-        request_variants = [
-            {"appids": app_id, "filters": "basic", "l": "english", "cc": "US"},
-            {"appids": app_id, "l": "english", "cc": "US"},
-        ]
-
-        last_problem = "unknown response"
-
-        for attempt_index, params in enumerate(request_variants):
-            request_label = request_name
-            if attempt_index > 0:
-                request_label += "Fallback"
-
+        def worker():
+            client = SteamStoreClient(retry_max=retry_max, retry_delay=retry_delay)
             try:
-                req = SACRequest(
-                    "https://store.steampowered.com/api/appdetails",
-                    request_label,
-                    params=params,
-                ).req
-            except Exception as exc:
-                last_problem = f"request failed: {exc}"
-                break
+                resolved_appid = int(query)
+                matched_name = None
+            except ValueError:
+                match = client.search_app(query)
+                if not match:
+                    raise SteamStoreError(
+                        f'No sufficiently close Steam Store match was found for "{query}"'
+                    )
+                resolved_appid = int(match["appid"])
+                matched_name = match["name"]
 
-            try:
-                payload = req.json()
-            except ValueError as exc:
-                last_problem = f"invalid JSON: {exc}"
-                payload = None
-
-            entry = extract_appdetails_entry(payload, app_id)
-            if entry is not None:
-                return entry
-
-            if payload is not None:
-                last_problem = describe_appdetails_problem(payload, app_id)
-
-            if attempt_index == 0 and verbose:
-                update_logs(
-                    f"\n[!] Steam AppDetails did not return AppID {app_id}; "
-                    "retrying once without the basic filter..."
+            metadata = client.game_metadata(resolved_appid)
+            if (
+                config["Advanced"]["BypassGameVerification"] != "1"
+                and metadata.get("type") != "game"
+            ):
+                raise SteamStoreError(
+                    f'AppID {metadata["appid"]} is not reported by Steam as a game'
                 )
-                root.update()
+            metadata["matched_name"] = matched_name
+            return metadata
 
-        if verbose:
+        def success(metadata):
+            global appID
+            global gameName
+            global dlcIDs
+            global dlcNames
+            global gameSearchDone
+
+            appID = int(metadata["appid"])
+            gameName = metadata["name"]
+            dlcs = metadata.get("dlcs") or []
+            dlcIDs = [int(item["appid"]) for item in dlcs]
+            dlcNames = [str(item["name"]) for item in dlcs]
+
+            matched = metadata.get("matched_name")
+            if matched:
+                update_logs(
+                    f'\n- Matched "{query}" to "{matched}" (AppID: {appID})'
+                )
             update_logs(
-                f"\n[!] Steam AppDetails failed for AppID {app_id}: {last_problem}"
+                f'\n- Game found: {gameName} — AppID {appID}; '
+                f'{len(dlcIDs)} DLC entries retrieved.'
             )
+            gameFoundStatus.config(text=f"All details retrieved for {gameName}!")
+            gameSearchDone = True
+            frameCrack2.pack()
 
-        return None
+        def failure(exc, details):
+            update_logs(f"\n[!] Steam metadata lookup failed: {exc}")
+            gameFoundStatus.config(text="Steam lookup failed")
+            if isinstance(exc, SteamStoreError):
+                update_logs("\n- Try entering the exact AppID if name matching failed.")
 
-    def RetrieveAppName(appID: int) -> str:
-        entry = RetrieveAppDetails(appID, "RetrieveAppName")
-        if not entry or not entry.get("success"):
-            return "error"
+        def finish():
+            searchGameButton.config(state=tk.NORMAL)
+            selectFolderButton.config(state=tk.NORMAL)
+            installedGamesButton.config(state=tk.NORMAL)
 
-        app_data = entry.get("data")
-        if not isinstance(app_data, dict):
-            return "error"
-
-        name = app_data.get("name")
-        if not name:
-            return "error"
-
-        return name
-
-    def RetrieveGame() -> bool:
-        global appID
-        global gameName
-        global dlcIDs
-        global dlcNames
-
-        dlcIDs = []
-        dlcNames = []
-
-        update_logs("\n[1/2] Retrieving game informations from Steam...")
-        gameFoundStatus.config(text=f"[1/2] Retrieving game informations from Steam...")
-        root.update()
-        # https://wiki.teamfortress.com/wiki/User:RJackson/StorefrontAPI#appdetails
-        data = RetrieveAppDetails(appID, "RetrieveGame", verbose=True)
-        if data is None:
-            gameFoundStatus.config(text="Steam AppDetails unavailable - please try again")
-            return False
-
-        if not data.get("success"):
-            update_logs(f"\n[!] AppID {appID} not found or unavailable in this Steam region.")
-            gameFoundStatus.config(text=f"AppID {appID} not found.")
-            appID = 0
-            return False
-
-        game_data = data.get("data")
-        if not isinstance(game_data, dict):
-            update_logs(f"\n[!] Steam returned no usable game data for AppID {appID}.")
-            gameFoundStatus.config(text="Steam returned incomplete game data")
-            return False
-
-        game_type = game_data.get("type")
-        if config["Advanced"]["BypassGameVerification"] != "1" and game_type != "game":
-            update_logs(f"\n[!] AppID {appID} is not a game. You can bypass this verification in the Advanced settings.")
-            gameFoundStatus.config(text=f"AppID {appID} is not a game.")
-            appID = 0
-            return False
-
-        gameName = game_data.get("name")
-        if not gameName:
-            update_logs(f"\n[!] Steam returned AppID {appID} without a game name.")
-            gameFoundStatus.config(text="Steam returned incomplete game data")
-            return False
-
-        appID = int(game_data.get("steam_appid", appID))
-        update_logs(f"- Game found! Name: {gameName} - AppID: {appID}")
-
-        update_logs("\n[2/2] Retrieving DLCs...")
-        gameFoundStatus.config(text=f"[2/2] Retrieving DLCs...")
-        root.update()
-
-        # Optional config check
-        option = "0"
-        try:
-            option = config["Developer"]["RetrieveDLCOption"]
-        except:
-            pass
-
-        if option == "1":
-            # Old retrieve option
-            update_logs("Using the old retrieve option (RetrieveDLCOption is set to 1)")
-
-            if "dlc" in game_data:
-                dlcIDs = game_data["dlc"]
-                dlcIDsLen = len(dlcIDs)
-
-                if dlcIDsLen >= HIGH_DLC_WARNING:
-                    update_logs(f"/!\\ WARNING: This game has more than {HIGH_DLC_WARNING} DLCs. Requests may fail due to Steam rate limiting. If it does, just give it time, it'll eventually manage to retrieve all DLCs.")
-
-                # Get DLCs names
-                for i in range(dlcIDsLen):
-                    appName = RetrieveAppName(dlcIDs[i])
-                    if appName == "error":
-                        update_logs(f"[!] Error! No App Name found for AppID {dlcIDs[i]}")
-                        gameFoundStatus.config(text=f"[!] Error! No App Name found for AppID {dlcIDs[i]}")
-                        appID = 0
-                        return False
-                    dlcNames.append(appName)
-                    update_logs("- Found DLC " + str(i+1) + "/" + str(dlcIDsLen) + ": " + appName + " (" + str(dlcIDs[i]) + ")")
-                    gameFoundStatus.config(text=f"[2/2] Retrieving DLCs... ({i+1}/{dlcIDsLen})")
-                    root.update()
-            else:
-                update_logs("- No DLC found for this game!")
-        else:
-            # Default retrieve option
-
-            try:
-                req2 = SACRequest("https://store.steampowered.com/dlc/" + str(appID) +"/random/ajaxgetfilteredrecommendations/?query&count=10000", "RetrieveDLC").req
-            except Exception:
-                gameFoundStatus.config(text=f"An error has occurred")
-                return False
-            data2 = req2.json()
-            if not data2["success"]:
-                update_logs("[!] Retrieve DLC request failed!")
-                gameFoundStatus.config(text=f"Retrieve DLC request failed!")
-                appID = 0
-                return False
-
-            if data2["total_count"] == 0:
-                update_logs("- No DLC found for this game!")
-            else:
-                if data2["total_count"] >= HIGH_DLC_WARNING:
-                    update_logs(f"/!\\ WARNING: This game has more than {HIGH_DLC_WARNING} DLCs. Requests may fail due to Steam rate limiting. If it does, just give it time, it'll eventually manage to retrieve all DLCs.")
-
-                resultsIndex = 0
-
-                # format: data-ds-appid="1812883"
-                i = -1
-                while i + 1 < data2["total_count"]:
-                    i += 1
-
-                    resultsStr = ""
-                    resultsIndex = data2["results_html"].find("data-ds-appid=\"", resultsIndex)
-                    resultsIndex += len("data-ds-appid=\"")
-
-                    while data2["results_html"][resultsIndex] != "\"":
-                        resultsStr += data2["results_html"][resultsIndex]
-                        resultsIndex += 1
-
-                    dlcID = int(resultsStr)
-                    if dlcID in dlcIDs: # data-ds-appid is present 2 times for each AppID currently. This will allow us to not include it if it is already.
-                        i -= 1
-                        continue
-                    dlcIDs.append(int(resultsStr))
-
-                    # Retrieve DLC name
-                    appName = RetrieveAppName(dlcIDs[i])
-                    if appName == "error":
-                        update_logs(f"[!] Error! No App Name found for AppID {dlcIDs[i]}")
-                        gameFoundStatus.config(text=f"Error! No App Name found for AppID {dlcIDs[i]}")
-                        appID = 0
-                        return False
-                    dlcNames.append(appName)
-                    update_logs("- Found DLC " + str(i+1) + "/" + str(data2["total_count"]) + ": " + appName + " (" + str(dlcIDs[i]) + ")")
-                    gameFoundStatus.config(text=f"[2/2] Retrieving DLCs... ({i+1}/{data2['total_count']})")
-                    root.update()
-
-        update_logs(f"Finished retrieving all the details about the game {gameName} (appID: {appID})")
-        gameFoundStatus.config(text=f"All details retrieved for {gameName}!")
-        return True # Retrieved game and DLCs successfully
+        run_background(root, worker, success, failure, finish)
 
     def CrackGame():
         global appID
 
         # Prevents the user from searching a game or selecting a folder or re-clicking the crack game button
         selectFolderButton.config(state=tk.DISABLED)
+        installedGamesButton.config(state=tk.DISABLED)
         searchGameButton.config(state=tk.DISABLED)
         selectCrackButton.config(state=tk.DISABLED)
         crackGameButton.config(state=tk.DISABLED)
@@ -686,6 +654,15 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         configDir = os.path.join(configDir, "files") # "sac_emu/game_ali213/files" for example
 
+        cached_gbe_files = {}
+        if config["Crack"]["SelectedCrack"] == "game_goldberg":
+            for gbe_name in ("steam_api.dll", "steam_api64.dll"):
+                cached_path = get_cached_gbe_dll(get_tool_cache_dir(), gbe_name)
+                if cached_path:
+                    cached_gbe_files[gbe_name] = cached_path
+            if cached_gbe_files:
+                update_logs("\n- Using verified cached GBE_FORK Steam API DLLs for this run.")
+
         # Check if some custom Steamless options have been set up
         steamlessOptions = ""
         try:
@@ -695,34 +672,103 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         root.update()
 
-        dllLocations = []
+        dllLocations = {}
         for root_dir, dirs, files in os.walk(folder_path):
             apiFile = ""
+            files_by_lower = {name.casefold(): name for name in files}
 
             # Use Steamless if configured
-            if config["Preferences"]["Steamless"] == "1" and crackListSteamless[config["Crack"]["SelectedCrack"]]:
+            if (
+                config["Preferences"]["CrackOption"] != "2"
+                and config["Preferences"]["Steamless"] == "1"
+                and crackListSteamless[config["Crack"]["SelectedCrack"]]
+            ):
                 # Run Steamless on every .exe file. If it's not under DRM or not the wrong file, no problem!
                 for fileName in files:
-                    if not fileName.endswith(".exe"):
+                    if not fileName.casefold().endswith(".exe"):
                         continue
                     steamless_attempted += 1
                     update_logs(f"- Attempting to run Steamless on {fileName}")
                     root.update()
                     #update_logs("\n[[[ Steamless logs ]]]")
                     fileLocation = root_dir + "/" + fileName
-                    shutil.move(fileLocation, fileName) # Move the file to our location
-                    steamless_path = get_resource_path(os.path.join("Steamless_CLI", "Steamless.CLI.exe"))
+                    cached_steamless = get_cached_steamless_executable(get_tool_cache_dir())
+                    steamless_path = (
+                        cached_steamless
+                        or get_resource_path(os.path.join("Steamless_CLI", "Steamless.CLI.exe"))
+                    )
                     if os.name != "nt":
                         update_logs("- Steamless is Windows-only; skipping this executable on the current platform.")
-                        shutil.move(fileName, fileLocation)
                         root.update()
                         continue
-                    subprocess.call(f'"{steamless_path}" {steamlessOptions}"{fileName}"', shell=True, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
-                    #update_logs("[[[ -------------- ]]]\n")
 
-                    # Check if the game was NOT unpacked
+                    # Modern verified Steamless releases can process the original path
+                    # in-place, so SAC no longer needs to temporarily move the EXE.
+                    if cached_steamless:
+                        try:
+                            result = run_modern_steamless(
+                                cached_steamless,
+                                fileLocation,
+                                steamlessOptions.strip(),
+                            )
+                        except Exception as exc:
+                            update_logs(
+                                f"- Modern Steamless could not run on {fileName}: {exc}"
+                            )
+                            update_logs(
+                                "\n  Falling back to the bundled Steamless compatibility build."
+                            )
+                        else:
+                            unpacked_path = result["output_path"]
+                            if result["unpacked"]:
+                                steamless_succeeded += 1
+                                update_logs(
+                                    f"- Modern Steamless unpacked {fileName} in place "
+                                    f"(exit {result['returncode']})."
+                                )
+
+                                if config["FileNames"]["GameEXE"] != "":
+                                    exe_backup = fileLocation + config["FileNames"]["GameEXE"]
+                                    if os.path.exists(exe_backup):
+                                        update_logs(
+                                            f"[!] Refusing to overwrite existing executable backup: {exe_backup}. "
+                                            "Restore originals first."
+                                        )
+                                        os.remove(unpacked_path)
+                                        steamless_succeeded -= 1
+                                        steamless_failed += 1
+                                        root.update()
+                                        continue
+                                    shutil.move(fileLocation, exe_backup)
+                                    record_change(folder_path, fileLocation, exe_backup)
+                                    backup_count += 1
+                                else:
+                                    os.remove(fileLocation)
+
+                                shutil.move(unpacked_path, fileLocation)
+                                root.update()
+                                continue
+
+                            detail = (result["stderr"] or result["stdout"]).strip()
+                            update_logs(
+                                f"- Modern Steamless did not unpack {fileName} "
+                                f"(exit {result['returncode']})."
+                            )
+                            if detail:
+                                update_logs("\n  " + detail.splitlines()[-1])
+                            update_logs(
+                                "\n  Falling back to the bundled Steamless compatibility build."
+                            )
+
+                    # Legacy bundled Steamless path retained as a compatibility fallback.
+                    shutil.move(fileLocation, fileName)
+                    subprocess.call(
+                        f'"{steamless_path}" {steamlessOptions}"{fileName}"',
+                        shell=True,
+                        creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+                    )
+
                     if not os.path.isfile(fileName + ".unpacked.exe"):
-                        # Move back the original game's exe since it didn't change
                         steamless_failed += 1
                         update_logs("- Steamless did not produce an unpacked executable for " + fileName + ".")
                         shutil.move(fileName, fileLocation)
@@ -732,7 +778,6 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     steamless_succeeded += 1
                     update_logs(f"- Steamless produced an unpacked executable for {fileName}")
                     if config["FileNames"]["GameEXE"] != "":
-                        # Rename and move back the original game's exe
                         exe_backup = fileLocation + config["FileNames"]["GameEXE"]
                         if os.path.exists(exe_backup):
                             update_logs(
@@ -749,52 +794,91 @@ try: # Handles Python errors to write them to a log file so they can be reported
                         record_change(folder_path, fileLocation, exe_backup)
                         backup_count += 1
                     else:
-                        # Delete the original game's exe
                         os.remove(fileName)
-                    # Rename and move the unpacked exe to the game's directory
                     shutil.move(fileName + ".unpacked.exe", fileLocation)
                     root.update()
 
-            if "steam_api.dll" in files:
-                if config["FileNames"]["SteamAPI"] in files:
-                    update_logs("[!] Seems like a file named " + config["FileNames"]["SteamAPI"] + " is present. This could indicate that steam_api.dll has already been cracked! Overwriting steam_api.dll. No backup of the previous steam_api.dll could be created, and the file has been deleted. " + config["FileNames"]["SteamAPI"] + " has been restored.")
-                    os.remove(root_dir + "/steam_api.dll")
-                    shutil.move(root_dir + "/" + config["FileNames"]["SteamAPI"], root_dir + "/steam_api.dll")
-
-                apiFile = root_dir + "/steam_api.dll"
+            steam_api_name = files_by_lower.get("steam_api.dll")
+            if steam_api_name:
+                apiFile = os.path.join(root_dir, steam_api_name)
                 try:
                     apiFileVersion = GetFileVersion(apiFile)
                 except Exception:
-                    update_logs("[!] steam_api.dll: could not retrieve the file version! Seems like the steam_api.dll file has already been cracked! Aborting...")
+                    update_logs(
+                        "[!] steam_api.dll: could not retrieve the file version. "
+                        "The file may already be modified; aborting to preserve restore safety."
+                    )
                     EndCrack()
                     return
 
-                update_logs(f"- Found steam_api.dll in {root_dir}, planning crack application")
+                dllLocations.setdefault(root_dir, apiFileVersion)
+                update_logs(f"- Found {steam_api_name} in {root_dir}, planning crack application")
 
-            if "steam_api64.dll" in files:
-                if config["FileNames"]["SteamAPI64"] in files:
-                    update_logs("[!] Seems like a file named " + config["FileNames"]["SteamAPI64"] + " is present. This could indicate that steam_api64.dll has already been cracked! Overwriting steam_api64.dll. No backup of the previous steam_api64.dll could be created, and the file has been deleted. " + config["FileNames"]["SteamAPI64"] + " has been restored.")
-                    os.remove(root_dir + "/steam_api64.dll")
-                    shutil.move(root_dir + "/" + config["FileNames"]["SteamAPI64"], root_dir + "/steam_api64.dll")
-
-                apiFile = root_dir + "/steam_api64.dll"
+            steam_api64_name = files_by_lower.get("steam_api64.dll")
+            if steam_api64_name:
+                apiFile = os.path.join(root_dir, steam_api64_name)
                 try:
                     apiFileVersion = GetFileVersion(apiFile)
                 except Exception:
-                    update_logs("[!] steam_api64.dll: could not retrieve the file version! Seems like the steam_api64.dll file has already been cracked! Aborting...")
+                    update_logs(
+                        "[!] steam_api64.dll: could not retrieve the file version. "
+                        "The file may already be modified; aborting to preserve restore safety."
+                    )
                     EndCrack()
                     return
 
-                update_logs(f"- Found steam_api64.dll in {root_dir}, planning crack application")
+                dllLocations.setdefault(root_dir, apiFileVersion)
+                update_logs(f"- Found {steam_api64_name} in {root_dir}, planning crack application")
 
             if apiFile != "":
-                if root_dir not in dllLocations:
-                    dllLocations.append(root_dir)
-
                 cracked = True
                 root.update()
 
-        for dllCurrentLocation in dllLocations:
+        if config["Preferences"]["CrackOption"] == "2":
+            if not dllLocations:
+                update_logs("\n[!] No Steam API DLL locations were found; crack-only package was not created.")
+                gameFoundStatus.config(text="No Steam API DLL found")
+                EndCrack()
+                return
+
+            dlc_with_spaces = "".join(
+                f"{dlc_id} = {dlc_name}\n"
+                for dlc_id, dlc_name in zip(dlcIDs, dlcNames)
+            )
+            dlc_without_spaces = "".join(
+                f"{dlc_id}={dlc_name}\n"
+                for dlc_id, dlc_name in zip(dlcIDs, dlcNames)
+            )
+            replacements = {
+                "SAC_AppID": str(appID),
+                "SAC_DLC": dlc_with_spaces,
+                "SAC_NoSpaceDLC": dlc_without_spaces,
+            }
+
+            try:
+                archive_path = build_crack_only_archive(
+                    game_root=folder_path,
+                    game_name=gameName,
+                    appid=appID,
+                    template_root=configDir,
+                    dll_locations=dllLocations,
+                    replacements=replacements,
+                    output_dir=get_user_path("crack_only"),
+                    source_overrides=cached_gbe_files,
+                )
+            except Exception as exc:
+                update_logs(f"\n[!] Crack-only package generation failed: {exc}")
+                gameFoundStatus.config(text="Crack-only package failed")
+            else:
+                update_logs(
+                    "\nCrack-only package created without modifying the selected game:\n"
+                    + archive_path
+                )
+                gameFoundStatus.config(text="Crack-only package created")
+            EndCrack()
+            return
+
+        for dllCurrentLocation, apiFileVersion in dllLocations.items():
             for root_dir, dirs, files in os.walk(configDir):
                 relativeRootDir = root_dir[len(configDir) + 1:]
                 dllAbsoluteRelativeLocation = os.path.join(dllCurrentLocation, relativeRootDir)
@@ -853,7 +937,10 @@ try: # Handles Python errors to write them to a log file so they can be reported
                         record_change(folder_path, target_path, None)
                         created_count += 1
 
-                    shutil.copyfile(os.path.join(root_dir, fileName), target_path)
+                    source_path = os.path.join(root_dir, fileName)
+                    if fileName in cached_gbe_files:
+                        source_path = cached_gbe_files[fileName]
+                    shutil.copyfile(source_path, target_path)
 
                     if fileName in ("steam_api.dll", "steam_api64.dll"):
                         api_replacements += 1
@@ -918,6 +1005,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
         # Now let's remove locks
         selectFolderButton.config(state=tk.NORMAL)
+        installedGamesButton.config(state=tk.NORMAL)
         searchGameButton.config(state=tk.NORMAL)
         selectCrackButton.config(state=tk.NORMAL)
         crackGameButton.config(state=tk.NORMAL)
@@ -949,11 +1037,49 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     # ----- Settings -----
 
+    def _update_external_tool(button, status_label, tool_name, worker):
+        button.config(state=tk.DISABLED)
+        status_label.config(text=f"Updating {tool_name}...")
+
+        def success(metadata):
+            version = metadata.get("version", "unknown")
+            digest = metadata.get("asset_sha256", "")
+            short_digest = digest[:12] + "..." if digest else "not supplied"
+            status_label.config(text=f"{tool_name} ready: {version}")
+            update_logs(
+                f"\n- {tool_name} updated to {version}; verified asset SHA-256 {short_digest}"
+            )
+
+        def failure(exc, details):
+            status_label.config(text=f"{tool_name} update failed")
+            update_logs(f"\n[!] {tool_name} update failed: {exc}\n{details}")
+
+        def finish():
+            button.config(state=tk.NORMAL)
+
+        run_background(root, worker, success, failure, finish)
+
+    def UpdateGBEFork():
+        _update_external_tool(
+            gbeUpdateButton,
+            externalToolsStatus,
+            "GBE_FORK",
+            lambda: update_gbe_fork(get_tool_cache_dir()),
+        )
+
+    def UpdateSteamless():
+        _update_external_tool(
+            steamlessUpdateButton,
+            externalToolsStatus,
+            "Steamless",
+            lambda: update_steamless(get_tool_cache_dir()),
+        )
+
     def SettingsButton():
         top = tk.Toplevel(root)
         #top.geometry("750x250")
         top.title(f"SteamAutoCracker GUI v{VERSION} - Settings")
-        top.resizable(False, False) # Prevents resizing the window's width and height
+        top.resizable(True, True)
         biggerFont = DEFAULT_FONT.copy()
         biggerFont.config(size=10)
         ttk.Label(top, text= "Settings", font=FONT2).pack(padx=200, pady=(10,10), anchor="center")
@@ -1006,7 +1132,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         
         # Update options (UpdateOption)
         ttk.Label(scrollFrame, text="Updates:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
-        ttk.Label(scrollFrame, text="This checks the latest upstream version on GitHub.\nIf you prefer not to make that request automatically, disable automatic update checks.", font=FONT4, padding=0, foreground="#575757", wraplength=600).pack(padx=(6, 0), pady=(0,0), anchor="w")
+        ttk.Label(scrollFrame, text="This checks the latest maintained-fork release on GitHub.\nIf you prefer not to make that request automatically, disable automatic update checks.", font=FONT4, padding=0, foreground="#575757", wraplength=600).pack(padx=(6, 0), pady=(0,0), anchor="w")
         settings_frame_updates = ttk.Frame(scrollFrame)
         settings_frame_updates.pack(padx=(15, 0), pady=(0, 0), anchor="w")
 
@@ -1028,7 +1154,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         CrackOption_var.set(config["Preferences"]["CrackOption"])
         ttk.Radiobutton(settings_frame1, text="Crack the game automatically (RECOMMENDED)", variable=CrackOption_var, value="0", command=lambda: UpdateConfigKey("Preferences", "CrackOption", CrackOption_var.get())).grid(row=0, column=0, sticky="w")
         ttk.Radiobutton(settings_frame1, text="Only create the crack config, and put it in the same directory as steam_api(64).dll", variable=CrackOption_var, value="1", command=lambda: UpdateConfigKey("Preferences", "CrackOption", CrackOption_var.get())).grid(row=1, column=0, sticky="w")
-        ttk.Radiobutton(settings_frame1, text="Only create the crack config, and put it in the same directory as the Steam Auto Cracker tool\n(currently bugged, doesn't work!)", variable=CrackOption_var, value="2", command=lambda: UpdateConfigKey("Preferences", "CrackOption", CrackOption_var.get())).grid(row=2, column=0, sticky="w")
+        ttk.Radiobutton(settings_frame1, text="Build a crack-only ZIP beside SteamAutoCracker (does not modify the selected game)", variable=CrackOption_var, value="2", command=lambda: UpdateConfigKey("Preferences", "CrackOption", CrackOption_var.get())).grid(row=2, column=0, sticky="w")
 
         # Steamless (Steamless)
         ttk.Label(scrollFrame, text="Steamless:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
@@ -1043,6 +1169,50 @@ try: # Handles Python errors to write them to a log file so they can be reported
         Steamless_var.set(config["Preferences"]["Steamless"])
         ttk.Radiobutton(settings_frame2, text="Don't attempt to use Steamless", variable=Steamless_var, value="0", command=lambda: UpdateConfigKey("Preferences", "Steamless", Steamless_var.get())).grid(row=0, column=0, sticky="w")
         ttk.Radiobutton(settings_frame2, text="Attempt to use Steamless (RECOMMENDED)", variable=Steamless_var, value="1", command=lambda: UpdateConfigKey("Preferences", "Steamless", Steamless_var.get())).grid(row=1, column=0, sticky="w")
+
+        ttk.Label(scrollFrame, text="Maintained external tools:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
+        ttk.Label(
+            scrollFrame,
+            text="Optional verified updates are stored beside SAC, not inside the game. Downloads are checked against GitHub's reported size and SHA-256 digest. Modern Steamless-KR needs .NET 9; SAC falls back to the bundled compatibility build if it cannot run.",
+            font=FONT4,
+            padding=0,
+            foreground="#575757",
+            wraplength=600,
+        ).pack(padx=(6, 0), pady=(0,0), anchor="w")
+
+        externalToolsFrame = ttk.Frame(scrollFrame)
+        externalToolsFrame.pack(padx=(15, 0), pady=(0, 10), anchor="w")
+
+        global gbeUpdateButton
+        global steamlessUpdateButton
+        global externalToolsStatus
+
+        gbeUpdateButton = ttk.Button(
+            externalToolsFrame,
+            text="Update GBE_FORK",
+            padding=4,
+            command=UpdateGBEFork,
+        )
+        gbeUpdateButton.grid(row=0, column=0, padx=(0, 8))
+
+        steamlessUpdateButton = ttk.Button(
+            externalToolsFrame,
+            text="Update Steamless",
+            padding=4,
+            command=UpdateSteamless,
+        )
+        steamlessUpdateButton.grid(row=0, column=1)
+
+        gbe_meta = get_cached_gbe_metadata(get_tool_cache_dir()) or {}
+        steamless_meta = get_cached_steamless_metadata(get_tool_cache_dir()) or {}
+        cached_summary = (
+            "GBE_FORK: "
+            + str(gbe_meta.get("version", "bundled fallback"))
+            + " | Steamless: "
+            + str(steamless_meta.get("version", "bundled fallback"))
+        )
+        externalToolsStatus = ttk.Label(externalToolsFrame, text=cached_summary)
+        externalToolsStatus.grid(row=1, column=0, columnspan=2, sticky="w")
 
         # FileNames
         ttk.Label(scrollFrame, text="File names:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
@@ -1154,7 +1324,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     crackList = { # A list of all selectable cracks
         "game_ali213": ["ALI213 (Game)", "The ALI213 crack is simple and can crack a full game. It will unlock all DLCs and will also prevent the game from connecting to the internet.\nThe game folder can then freely be shared with others as the crack is contained inside the game folder.\nIf it doesn't work, consider using Goldberg instead."],
-        "game_goldberg": ["Goldberg (Game)", "The Goldberg (experimental) crack is similar to ALI213's one.\nIt is open-source, which is better, but might not work with older games, due to SAC's current partial support.\nThis crack will however work better for recent games, where ALI213 could fail.\nInternet connection is blocked, but LAN is enabled."],
+        "game_goldberg": ["GBE_FORK / Goldberg (Game)", "Uses the bundled Goldberg-compatible template. You can optionally download verified, current GBE_FORK Steam API DLLs from Settings; cached DLLs are preferred automatically.\nInternet connection is blocked, but LAN is enabled."],
         "dlc_creamapi": ["CreamAPI (DLC)", "The CreamAPI crack will unlock all DLCs but will not crack the main game. It is meant to be used with bought copies of a game, with your real Steam account.\nOnly use this is you have purchased the game on Steam and want to unlock its DLCs.\nWill not work for most online games, but might exceptionally work with some like Beat Saber."]
     }
 
@@ -1300,29 +1470,31 @@ try: # Handles Python errors to write them to a log file so they can be reported
     # ---------------------------------------
 
     def CheckUpdates():
-        updatesButton.config(text="Searching for updates...", state=tk.DISABLED)
+        updatesButton.config(text="Searching for fork updates...", state=tk.DISABLED)
         root.update()
 
         try:
-            req = SACRequest(GITHUB_LATESTVERSIONJSON, "RetrieveLatestVersionJson").req
+            req = SACRequest(FORK_LATESTRELEASEJSON, "RetrieveForkLatestRelease").req
             data = req.json()
-            latest = data["version"]
+            latest = str(data["tag_name"]).lstrip("vV")
         except Exception as exc:
             updatesButton.config(text="Update check failed", state=tk.NORMAL)
-            update_logs(f"\n[!] Update check failed: {exc}")
+            update_logs(f"\n[!] Fork update check failed: {exc}")
             return
 
         global latestversion
         global release_link
         latestversion = latest
-        release_link = data.get("release", "https://github.com/BigBoiCJ/SteamAutoCracker/releases")
-        release_link = release_link.replace("[VERSION]", latestversion)
+        release_link = data.get(
+            "html_url",
+            f"https://github.com/{FORK_REPO}/releases/latest",
+        )
 
         if version_key(latestversion) <= version_key(VERSION):
             updatesButton.config(text="SAC fork is up to date!", state=tk.NORMAL)
             return
 
-        updatesButton.config(text="New upstream release available", state=tk.NORMAL)
+        updatesButton.config(text="New fork release available", state=tk.NORMAL)
         DisplayUpdate()
 
     def DisplayUpdate():
@@ -1332,7 +1504,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         biggerFont = DEFAULT_FONT.copy()
         biggerFont.config(size=10)
         ttk.Label(top, text= "Update", font=FONT2).pack(padx=200, pady=(10,10), anchor="center")
-        ttk.Label(top, text="A newer upstream SteamAutoCracker release is available.\nYou can open its release page without replacing this fork automatically.", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
+        ttk.Label(top, text="A newer wefalltomorrow SteamAutoCracker release is available.\nOpen the release page to review and download it.", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
         ttk.Label(top, text=f"Current version: {VERSION}", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(15,0), anchor="w")
         ttk.Label(top, text=f"Latest version: {latestversion}", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(0,10), anchor="w")
 
@@ -1340,7 +1512,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         updateDisplayButtonsFrame.pack(pady=(5,20))
 
         global updateDisplayButtonUpdate
-        updateDisplayButtonUpdate = ttk.Button(updateDisplayButtonsFrame, text="Open upstream release", command=UpdateSAC, padding=3)
+        updateDisplayButtonUpdate = ttk.Button(updateDisplayButtonsFrame, text="Open fork release", command=UpdateSAC, padding=3)
         updateDisplayButtonUpdate.grid(row=0, column=0)
 
         global updateDisplayButtonCopy
@@ -1362,8 +1534,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
     def UpdateSAC():
         updateDisplayStatusLabel.pack(pady=(0,20), anchor="center")
         updateDisplayStatusLabel.config(
-            text="Opening the upstream release page in your browser.\n"
-                 "Automatic replacement is disabled in this fork so fork-specific changes are preserved."
+            text="Opening the maintained fork release page in your browser.\n"
+                 "Downloads are manual so you can review the release before replacing your current build."
         )
         root.update()
         webbrowser.open(release_link)
@@ -1399,7 +1571,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     ApplyStyle()
 
     ttk.Label(root, text=f"SteamAutoCracker GUI v{VERSION}", font=FONT2, padding=0).pack(pady=(10, 0), anchor="center")
-    ttk.Label(root, text="by BigBoiCJ", padding=0).pack(pady=(0, 0), anchor="center")
+    ttk.Label(root, text="BigBoiCJ base · wefalltomorrow best-of-all fork", padding=0).pack(pady=(0, 0), anchor="center")
 
     updatesFrame = tk.Frame(root)
     updatesButton = ttk.Button(updatesFrame, text="Check for updates", command=CheckUpdates, padding=0)
@@ -1416,8 +1588,25 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     # Select folder fields
     tk.Label(root, text="Select where your game is installed :",).pack(pady=(20, 5), anchor="center")
-    selectFolderButton = ttk.Button(root, text="Select a folder", command=lambda: handle_folder_selection())
-    selectFolderButton.pack(pady=(0, 10))
+    folderButtonsFrame = ttk.Frame(root)
+    folderButtonsFrame.pack(pady=(0, 4))
+
+    selectFolderButton = ttk.Button(
+        folderButtonsFrame,
+        text="Select a folder",
+        command=lambda: handle_folder_selection(),
+    )
+    selectFolderButton.grid(row=0, column=0, padx=(0, 6))
+
+    installedGamesButton = ttk.Button(
+        folderButtonsFrame,
+        text="Installed Steam games",
+        command=BrowseInstalledGames,
+    )
+    installedGamesButton.grid(row=0, column=1, padx=(6, 0))
+
+    installedGamesStatus = ttk.Label(root, text="")
+    installedGamesStatus.pack(pady=(0, 8))
 
     selectedFolderFrame = tk.Frame(root) # This frame will contain the label. This is so we can resize the root window properly when the text is empty.
     selectedFolderFrame.pack()
@@ -1450,7 +1639,6 @@ try: # Handles Python errors to write them to a log file so they can be reported
     gameNameEntry.grid(row=0, column=0, ipady=5)
     searchGameButton = ttk.Button(frame4, text="Search", padding=5, command=search_game)
     searchGameButton.grid(row=0, column=1, padx=(10, 0))
-    updateAppListButton = ttk.Button(frame4, text="Update the App List", padding=0, command=UpdateAppList)
 
     gameFoundStatus = ttk.Label(frameGame2, text="")
     gameFoundStatus.pack(pady=(5, 0), anchor="center")
