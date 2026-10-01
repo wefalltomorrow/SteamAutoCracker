@@ -9,6 +9,7 @@
 - Safe restore behavior that preserves the currently modified file as `.sac-replaced` before putting the original backup back.
 - Conservative legacy-backup discovery for `steam_api.dll.bak`, `steam_api64.dll.bak`, and executable backups.
 - CI regression tests for restore behavior, traversal protection, truthful completion messages, and source/runtime theme compatibility.
+- Release pipeline smoke test that launches the compiled GUI and fails publishing if it exits during startup.
 
 ### Changed
 
