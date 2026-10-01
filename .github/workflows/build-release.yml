@@ -156,7 +156,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ steps.version.outputs.tag }}"
-          $title = "SteamAutoCracker ${{ steps.version.outputs.tag }} — wefalltomorrow fork"
+          $title = "SteamAutoCracker ${{ steps.version.outputs.tag }}"
           $zip = "release\${{ steps.version.outputs.zip }}"
           $sha = "$zip.sha256"
 
