@@ -506,22 +506,13 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
 
     def update_logs(log_message):
-        # Get current content
-        current_logs = logs_text.get("1.0", tk.END)
-
-        logs_text.config(state=tk.NORMAL)  # Enables modification (needed to add content)
-        # Delete the current content
-        logs_text.delete("1.0", tk.END)
-
-        # Insert the new message at the end with a linebreak
-        logs_text.insert(tk.END, current_logs + log_message)
-
-        # Scroll the widget to the bottom
-        logs_text.yview_moveto(1.0)
-
-        # Focus on the end
+        # Append directly instead of re-reading/deleting/reinserting the entire
+        # Text widget for every message. Long cracking runs can emit hundreds of
+        # log entries, so the old behavior became progressively more expensive.
+        logs_text.config(state=tk.NORMAL)
+        logs_text.insert(tk.END, str(log_message))
         logs_text.see(tk.END)
-        logs_text.config(state=tk.DISABLED)  # Disables modification (prevents the user from writing inside the field)
+        logs_text.config(state=tk.DISABLED)
 
     def search_game():
         query = gameNameEntry.get().strip()
