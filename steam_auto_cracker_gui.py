@@ -256,11 +256,18 @@ try: # Handles Python errors to write them to a log file so they can be reported
         root.update()
 
         update_logs(f"\nRestoring original files using {source}...")
+        if not manifest:
+            update_logs(
+                "\n[!] Legacy restore can only identify known backup pairs. "
+                "Additional files created by older SAC builds may remain and are not removed automatically."
+            )
         try:
             result = restore_entries(folder_path, entries)
 
             for restored_path in result["restored"]:
-                update_logs(f"\n- Restored: {restored_path}")
+                update_logs(f"\n- Restored original: {restored_path}")
+            for created_path in result["removed_created"]:
+                update_logs(f"\n- Removed SAC-created file from active path: {created_path}")
             for preserved_path in result["preserved"]:
                 update_logs(f"\n- Preserved modified file as: {preserved_path}")
             for skipped in result["skipped"]:
@@ -276,7 +283,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
                 remove_manifest(folder_path)
 
             update_logs(
-                f"\nRestore finished: {len(result['restored'])} restored, "
+                f"\nRestore finished: {len(result['restored'])} originals restored, "
+                f"{len(result['removed_created'])} SAC-created files removed from active paths, "
                 f"{len(result['preserved'])} modified files preserved, "
                 f"{len(result['skipped'])} skipped."
             )
