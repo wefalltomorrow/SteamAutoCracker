@@ -12,6 +12,7 @@ Best-of-all maintenance release combining the strongest maintainable ideas from 
 - Optional GBE_FORK updates are downloaded from the official release, verified against reported asset size/SHA-256, safely extracted, and cached beside SAC.
 - Optional Steamless-KR updates use the same verified flow. Modern cached Steamless runs in-place and SAC records the actual CLI exit result. If .NET 9 is unavailable or the modern tool cannot unpack a target, SAC falls back to the bundled compatibility build.
 - Compiled releases include a new `steam_auto_cracker_cli.exe` diagnostics/maintenance utility.
+- The old broken third crack approach is replaced by a non-destructive crack-only ZIP builder beside SAC.
 - Existing restore safety remains: manifests, traversal protection, no backup overwrite, preserved modified files, and truthful operation summaries.
 
 ## Maintenance CLI
