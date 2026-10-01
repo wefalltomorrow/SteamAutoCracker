@@ -14,58 +14,15 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
       - name: Update old release notes and PR comments
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         shell: bash
         run: |
-          cat > /tmp/v230.md <<'EOF'
-# v2.3.0-wft.1
-
-First maintenance release of this fork.
-
-- Fixed Steam AppDetails issue #124.
-- Added live Steam Store title lookup.
-- Added light/dark/black themes and a resizable GUI.
-- Replaced the old win32api version check with pefile.
-- Added Python 3.10/3.13 CI and a reproducible Windows build.
-- Rebuilt the Windows asset after fixing the ttkbootstrap/Tk startup constants.
-EOF
-
-          cat > /tmp/v231.md <<'EOF'
-# v2.3.1-wft.1
-
-Restore and result-reporting update.
-
-- Added Restore original files.
-- Added per-folder restore manifests.
-- Preserves modified files with a .sac-replaced suffix during restore.
-- Refuses to overwrite known-good backups.
-- Removed the unconditional success message.
-- Added compiled-GUI startup smoke testing before release.
-EOF
-
-          cat > /tmp/v240.md <<'EOF'
-# v2.4.0-wft.1
-
-Main feature update.
-
-- Added the installed Steam games browser and AppID/build matching.
-- Added recursive Steam API DLL detection.
-- Moved Steam metadata requests off the Tk UI thread.
-- Added optional verified GBE_FORK and Steamless-KR updates.
-- Added the maintenance CLI and crack-only ZIP mode.
-- Kept the restore system and bundled tool fallbacks.
-
-ZIP SHA-256: `aea36d4ea834b299e40e7bc3017410e071c081f2652b7337805916a6694f5514`
-EOF
-
-          gh release edit v2.3.0-wft.1 --repo "$REPO" --title "SteamAutoCracker v2.3.0-wft.1" --notes-file /tmp/v230.md
-          gh release edit v2.3.1-wft.1 --repo "$REPO" --title "SteamAutoCracker v2.3.1-wft.1" --notes-file /tmp/v231.md
-          gh release edit v2.4.0-wft.1 --repo "$REPO" --title "SteamAutoCracker v2.4.0-wft.1" --notes-file /tmp/v240.md
+          gh release edit v2.3.0-wft.1 --repo "$REPO" --title "SteamAutoCracker v2.3.0-wft.1" --notes $'# v2.3.0-wft.1\n\nFirst maintenance release of this fork.\n\n- Fixed Steam AppDetails issue #124.\n- Added live Steam Store title lookup.\n- Added light/dark/black themes and a resizable GUI.\n- Replaced the old win32api version check with pefile.\n- Added Python 3.10/3.13 CI and a reproducible Windows build.\n- Rebuilt the Windows asset after fixing the ttkbootstrap/Tk startup constants.'
+          gh release edit v2.3.1-wft.1 --repo "$REPO" --title "SteamAutoCracker v2.3.1-wft.1" --notes $'# v2.3.1-wft.1\n\nRestore and result-reporting update.\n\n- Added Restore original files.\n- Added per-folder restore manifests.\n- Preserves modified files with a .sac-replaced suffix during restore.\n- Refuses to overwrite known-good backups.\n- Removed the unconditional success message.\n- Added compiled-GUI startup smoke testing before release.'
+          gh release edit v2.4.0-wft.1 --repo "$REPO" --title "SteamAutoCracker v2.4.0-wft.1" --notes $'# v2.4.0-wft.1\n\nMain feature update.\n\n- Added the installed Steam games browser and AppID/build matching.\n- Added recursive Steam API DLL detection.\n- Moved Steam metadata requests off the Tk UI thread.\n- Added optional verified GBE_FORK and Steamless-KR updates.\n- Added the maintenance CLI and crack-only ZIP mode.\n- Kept the restore system and bundled tool fallbacks.\n\nZIP SHA-256: aea36d4ea834b299e40e7bc3017410e071c081f2652b7337805916a6694f5514'
 
           gh api --method PATCH "repos/$REPO/issues/comments/5915410891" -f body='Released in v2.3.0-wft.1.'
           gh api --method PATCH "repos/$REPO/issues/comments/5915411635" -f body='Included in v2.3.0-wft.1.'
