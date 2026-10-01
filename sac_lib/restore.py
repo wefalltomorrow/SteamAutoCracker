@@ -8,19 +8,32 @@ MANIFEST_VERSION = 1
 
 
 def _root(root):
-    return os.path.abspath(os.path.normpath(root))
+    return os.path.realpath(os.path.abspath(os.path.normpath(root)))
+
+
+def _is_within(root_abs, candidate):
+    try:
+        return os.path.commonpath([root_abs, candidate]) == root_abs
+    except ValueError:
+        return False
 
 
 def safe_join(root, relative_path):
     root_abs = _root(root)
-    candidate = os.path.abspath(os.path.normpath(os.path.join(root_abs, relative_path)))
-    if os.path.commonpath([root_abs, candidate]) != root_abs:
+    candidate = os.path.realpath(
+        os.path.abspath(os.path.normpath(os.path.join(root_abs, relative_path)))
+    )
+    if not _is_within(root_abs, candidate):
         raise ValueError(f"Path escapes selected folder: {relative_path}")
     return candidate
 
 
 def relpath(root, path):
-    return os.path.relpath(os.path.abspath(path), _root(root)).replace("\\", "/")
+    root_abs = _root(root)
+    candidate = os.path.realpath(os.path.abspath(path))
+    if not _is_within(root_abs, candidate):
+        raise ValueError(f"Path escapes selected folder: {path}")
+    return os.path.relpath(candidate, root_abs).replace("\\", "/")
 
 
 def manifest_path(root):
@@ -146,6 +159,10 @@ def restore_entries(root, entries):
             continue
 
         if backup:
+            if os.path.normcase(original) == os.path.normcase(backup):
+                skipped.append({"entry": entry, "reason": "backup path equals original path"})
+                continue
+
             if not os.path.isfile(backup):
                 skipped.append({"entry": entry, "reason": "backup missing"})
                 continue
