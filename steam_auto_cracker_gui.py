@@ -295,7 +295,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
             frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 8))
 
             columns = ("name", "appid", "build", "path")
-            tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse")
+            tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="extended")
             tree.heading("name", text="Game")
             tree.heading("appid", text="AppID")
             tree.heading("build", text="Build ID")
@@ -350,6 +350,56 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     )
                     top.destroy()
 
+            def preflight_selected():
+                selected = tree.selection()
+                games_to_check = [
+                    item_map[item] for item in selected if item in item_map
+                ]
+                if not games_to_check:
+                    messagebox.showinfo(
+                        "Batch preflight",
+                        "Select one or more installed games first.",
+                        parent=top,
+                    )
+                    return
+
+                def worker():
+                    results = []
+                    for game in games_to_check:
+                        validation = validate_game_folder(game["path"])
+                        results.append((game, validation))
+                    return results
+
+                def success(results):
+                    lines = []
+                    valid_count = 0
+                    api_count = 0
+                    for game, validation in results:
+                        if validation["valid"]:
+                            valid_count += 1
+                        count = len(validation.get("steam_api_files") or [])
+                        api_count += count
+                        status = (
+                            f"{count} Steam API DLL(s)"
+                            if validation["valid"]
+                            else validation["error"]
+                        )
+                        lines.append(
+                            f'{game["name"]} (AppID {game["appid"]}): {status}'
+                        )
+
+                    summary = (
+                        f"{valid_count}/{len(results)} folders passed validation; "
+                        f"{api_count} Steam API DLL(s) found.\n\n"
+                        + "\n".join(lines)
+                    )
+                    messagebox.showinfo("Batch preflight", summary, parent=top)
+
+                def failure(exc, details):
+                    update_logs(f"\n[!] Batch preflight failed: {exc}\n{details}")
+
+                run_background(root, worker, success, failure)
+
             filter_var.trace_add("write", populate)
             tree.bind("<Double-1>", choose)
             populate()
@@ -357,7 +407,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
             buttons = ttk.Frame(top)
             buttons.pack(pady=(0, 10))
             ttk.Button(buttons, text="Use selected game", command=choose).grid(row=0, column=0, padx=5)
-            ttk.Button(buttons, text="Close", command=top.destroy).grid(row=0, column=1, padx=5)
+            ttk.Button(buttons, text="Preflight selected", command=preflight_selected).grid(row=0, column=1, padx=5)
+            ttk.Button(buttons, text="Close", command=top.destroy).grid(row=0, column=2, padx=5)
             filter_entry.focus_set()
 
         def failure(exc, details):
