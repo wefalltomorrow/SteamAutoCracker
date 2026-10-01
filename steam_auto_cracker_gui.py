@@ -181,56 +181,185 @@ try: # Handles Python errors to write them to a log file so they can be reported
                 f"SACRequest: {self.name} failed after {max_tries} tries"
             ) from last_error
 
+    def _apply_folder_selection(folder_path_temp, suggested_entry=None):
+        global folder_path
+        global last_selected_folder
+
+        validation = validate_game_folder(folder_path_temp)
+        if not validation["valid"]:
+            update_logs("\n[!] " + validation["error"])
+            try:
+                messagebox.showerror("Invalid game folder", validation["error"])
+            except Exception:
+                pass
+            return False
+
+        folder_path = os.path.abspath(folder_path_temp)
+        last_selected_folder = os.path.dirname(folder_path)
+        config["Preferences"]["last_selected_folder"] = last_selected_folder
+        UpdateConfig()
+
+        folder_name = os.path.basename(folder_path)
+        update_logs(f"\nSelected folder: {folder_path}")
+
+        api_files = validation.get("steam_api_files") or []
+        if api_files:
+            update_logs(
+                f"\n- Found {len(api_files)} Steam API DLL"
+                + ("s" if len(api_files) != 1 else "")
+                + " under the selected folder."
+            )
+        elif validation.get("warning"):
+            update_logs("\n[!] " + validation["warning"])
+
+        selectedFolderLabel.config(text=f"Selected folder:\n{folder_path}")
+        selectedFolderLabel.pack()
+        restoreFilesButton.pack(pady=(0, 10))
+        frameGame2.pack()
+
+        gameNameEntry.delete(0, tk.END)
+        gameNameEntry.insert(0, suggested_entry or folder_name)
+
+        if gameSearchDone:
+            frameCrack2.pack()
+        return True
+
     def handle_folder_selection(event=None):
         global folder_path
         global last_selected_folder
-        last_selected_folder = config["Preferences"].get("last_selected_folder", "")
-        # Reset and hide UI elements related to folder selection and game cracking
+
         def reset_folder_selection_ui():
             selectedFolderLabel.config(text="")
             selectedFolderLabel.pack_forget()
             restoreFilesButton.pack_forget()
             frameGame2.pack_forget()
-            frameCrack2.pack_forget() # Hide the crack frame
+            frameCrack2.pack_forget()
 
-        # Determine the folder path based on the event type
-        if event:  # Handling drag and drop
-            folder_path_temp = event.data.strip("{}").replace("\\", "/") # Returns the directory with no "/" at the end
-        else:  # Handling button click
+        if event:
+            folder_path_temp = event.data.strip("{}").replace("\\", "/")
+        else:
             initial_dir = "/"
-            if last_selected_folder != "" and os.path.isdir(last_selected_folder):
+            last_selected_folder = config["Preferences"].get("last_selected_folder", "")
+            if last_selected_folder and os.path.isdir(last_selected_folder):
                 initial_dir = last_selected_folder
-            folder_path_temp = filedialog.askdirectory(initialdir=initial_dir) # Returns the directory with no "/" at the end
+            folder_path_temp = filedialog.askdirectory(initialdir=initial_dir)
             if isinstance(folder_path_temp, tuple):
                 folder_path_temp = folder_path_temp[0] if folder_path_temp else ""
 
-        if os.path.isdir(folder_path_temp):
-            folder_path = folder_path_temp
-            # Update the last dropped folder for future use
-            last_selected_folder = os.path.dirname(folder_path) # If no "/" at the end, returns the parent directory
-            config["Preferences"]["last_selected_folder"] = last_selected_folder
-            UpdateConfig()
-            folder_name = os.path.basename(folder_path) # Gets the name of the folder ("C:/Something/Games/Hello" will return "Hello")
+        if folder_path_temp and _apply_folder_selection(folder_path_temp):
+            return
 
-            # Update UI elements with the selected folder information
-            update_logs(f"\nSelected folder: {folder_path}")
-            selectedFolderLabel.config(text=f"Selected folder:\n{folder_path}")
-            selectedFolderLabel.pack()
-            restoreFilesButton.pack(pady=(0, 10))
-            frameGame2.pack()
+        if not folder_path_temp:
+            update_logs("\nNo folder selected")
+        folder_path = ""
+        reset_folder_selection_ui()
 
-            # Update the game name entry with the folder name
-            gameNameEntry.delete(0, tk.END) # Removes the content of the Entry element starting from index 0 to the end
-            gameNameEntry.insert(0, folder_name) # Inserts the name of the folder in the Entry element at the start of it (index 0)
+    def BrowseInstalledGames():
+        installedGamesButton.config(state=tk.DISABLED)
+        installedGamesStatus.config(text="Scanning Steam libraries...")
 
-            # Show crack frame if game search is done
-            if gameSearchDone:
-                frameCrack2.pack()
-        else:
-            # Handle invalid folder selection
-            update_logs("\nNo valid folder selected")
-            folder_path = ""
-            reset_folder_selection_ui()
+        def worker():
+            return find_installed_games()
+
+        def success(games):
+            installedGamesStatus.config(text=f"Found {len(games)} installed Steam games")
+            if not games:
+                messagebox.showinfo(
+                    "Installed Steam games",
+                    "No installed Steam games were found in the detected Steam libraries.",
+                )
+                return
+
+            top = tk.Toplevel(root)
+            top.title(f"SteamAutoCracker GUI v{VERSION} - Installed Steam games")
+            top.geometry("900x560")
+            top.minsize(700, 420)
+
+            ttk.Label(top, text="Installed Steam games", font=FONT2, padding=6).pack(
+                anchor="center", pady=(8, 0)
+            )
+
+            filter_var = tk.StringVar()
+            filter_entry = tk.Entry(top, textvariable=filter_var, font=FONT_APP_ENTRY)
+            filter_entry.pack(fill="x", padx=12, pady=(8, 8))
+
+            frame = ttk.Frame(top)
+            frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 8))
+
+            columns = ("name", "appid", "build", "path")
+            tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse")
+            tree.heading("name", text="Game")
+            tree.heading("appid", text="AppID")
+            tree.heading("build", text="Build ID")
+            tree.heading("path", text="Install path")
+            tree.column("name", width=230)
+            tree.column("appid", width=80, anchor="center")
+            tree.column("build", width=90, anchor="center")
+            tree.column("path", width=430)
+
+            yscroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=yscroll.set)
+            tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            yscroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+            item_map = {}
+
+            def populate(*_):
+                query = filter_var.get().strip().casefold()
+                for item in tree.get_children():
+                    tree.delete(item)
+                item_map.clear()
+
+                for game in games:
+                    haystack = (
+                        game["name"] + " " + game["appid"] + " " + game["path"]
+                    ).casefold()
+                    if query and query not in haystack:
+                        continue
+                    item = tree.insert(
+                        "",
+                        "end",
+                        values=(
+                            game["name"],
+                            game["appid"],
+                            game.get("buildid", ""),
+                            game["path"],
+                        ),
+                    )
+                    item_map[item] = game
+
+            def choose(*_):
+                selected = tree.selection()
+                if not selected:
+                    return
+                game = item_map.get(selected[0])
+                if not game:
+                    return
+                if _apply_folder_selection(game["path"], game["appid"]):
+                    update_logs(
+                        f'\n- Selected installed Steam game "{game["name"]}" '
+                        f'(AppID {game["appid"]}, build {game.get("buildid") or "unknown"}).'
+                    )
+                    top.destroy()
+
+            filter_var.trace_add("write", populate)
+            tree.bind("<Double-1>", choose)
+            populate()
+
+            buttons = ttk.Frame(top)
+            buttons.pack(pady=(0, 10))
+            ttk.Button(buttons, text="Use selected game", command=choose).grid(row=0, column=0, padx=5)
+            ttk.Button(buttons, text="Close", command=top.destroy).grid(row=0, column=1, padx=5)
+            filter_entry.focus_set()
+
+        def failure(exc, details):
+            installedGamesStatus.config(text="Steam library scan failed")
+            update_logs(f"\n[!] Installed-game scan failed: {exc}\n{details}")
+
+        def finish():
+            installedGamesButton.config(state=tk.NORMAL)
+
+        run_background(root, worker, success, failure, finish)
 
     def RestoreOriginalFiles():
         if not folder_path or not os.path.isdir(folder_path):
