@@ -1189,7 +1189,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         top = tk.Toplevel(root)
         #top.geometry("750x250")
         top.title(f"SteamAutoCracker GUI v{VERSION} - Settings")
-        top.resizable(False, False) # Prevents resizing the window's width and height
+        top.resizable(True, True)
         biggerFont = DEFAULT_FONT.copy()
         biggerFont.config(size=10)
         ttk.Label(top, text= "Settings", font=FONT2).pack(padx=200, pady=(10,10), anchor="center")
@@ -1279,6 +1279,42 @@ try: # Handles Python errors to write them to a log file so they can be reported
         Steamless_var.set(config["Preferences"]["Steamless"])
         ttk.Radiobutton(settings_frame2, text="Don't attempt to use Steamless", variable=Steamless_var, value="0", command=lambda: UpdateConfigKey("Preferences", "Steamless", Steamless_var.get())).grid(row=0, column=0, sticky="w")
         ttk.Radiobutton(settings_frame2, text="Attempt to use Steamless (RECOMMENDED)", variable=Steamless_var, value="1", command=lambda: UpdateConfigKey("Preferences", "Steamless", Steamless_var.get())).grid(row=1, column=0, sticky="w")
+
+        ttk.Label(scrollFrame, text="Maintained external tools:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
+        ttk.Label(
+            scrollFrame,
+            text="Optional verified updates are stored beside SAC, not inside the game. Downloads are checked against GitHub's reported size and SHA-256 digest.",
+            font=FONT4,
+            padding=0,
+            foreground="#575757",
+            wraplength=600,
+        ).pack(padx=(6, 0), pady=(0,0), anchor="w")
+
+        externalToolsFrame = ttk.Frame(scrollFrame)
+        externalToolsFrame.pack(padx=(15, 0), pady=(0, 10), anchor="w")
+
+        global gbeUpdateButton
+        global steamlessUpdateButton
+        global externalToolsStatus
+
+        gbeUpdateButton = ttk.Button(
+            externalToolsFrame,
+            text="Update GBE_FORK",
+            padding=4,
+            command=UpdateGBEFork,
+        )
+        gbeUpdateButton.grid(row=0, column=0, padx=(0, 8))
+
+        steamlessUpdateButton = ttk.Button(
+            externalToolsFrame,
+            text="Update Steamless",
+            padding=4,
+            command=UpdateSteamless,
+        )
+        steamlessUpdateButton.grid(row=0, column=1)
+
+        externalToolsStatus = ttk.Label(externalToolsFrame, text="")
+        externalToolsStatus.grid(row=1, column=0, columnspan=2, sticky="w")
 
         # FileNames
         ttk.Label(scrollFrame, text="File names:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
