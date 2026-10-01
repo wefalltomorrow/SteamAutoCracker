@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import zipfile
 from pathlib import Path
@@ -95,13 +96,71 @@ def _extract_7z(archive, destination):
         import py7zr
     except ImportError as exc:
         raise ToolUpdateError(
-            "py7zr is required to extract GBE_FORK releases"
+            "py7zr is required to inspect GBE_FORK archives safely"
         ) from exc
 
+    # Inspect every member with Python first so an external extractor can never
+    # be handed an archive containing ../ or absolute-path traversal entries.
     with py7zr.SevenZipFile(archive, mode="r") as zf:
-        for name in zf.getnames():
-            _safe_join(destination, name)
-        zf.extractall(destination)
+        member_names = list(zf.getnames())
+
+    for name in member_names:
+        _safe_join(destination, name)
+
+    extractors = []
+    for command in ("7z", "7zz", "7za"):
+        executable = shutil.which(command)
+        if executable:
+            extractors.append(
+                (
+                    executable,
+                    [executable, "x", archive, f"-o{destination}", "-y", "-bd"],
+                )
+            )
+            break
+
+    # Windows 10/11 ship bsdtar, whose libarchive backend can read 7z/BCJ2.
+    if not extractors:
+        tar_exe = shutil.which("tar")
+        if tar_exe:
+            extractors.append(
+                (
+                    tar_exe,
+                    [tar_exe, "-xf", archive, "-C", destination],
+                )
+            )
+
+    last_error = None
+    for executable, args in extractors:
+        completed = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            shell=False,
+        )
+        if completed.returncode == 0:
+            return
+        last_error = (
+            completed.stderr.strip()
+            or completed.stdout.strip()
+            or f"{os.path.basename(executable)} exited {completed.returncode}"
+        )
+
+    # py7zr remains a final fallback for archives that do not use unsupported
+    # filters. Current GBE_FORK releases use BCJ2, so Windows normally reaches
+    # this only when neither 7-Zip nor Windows tar is available.
+    try:
+        with py7zr.SevenZipFile(archive, mode="r") as zf:
+            zf.extractall(destination)
+        return
+    except Exception as exc:
+        detail = last_error or str(exc)
+        raise ToolUpdateError(
+            "Could not extract the GBE_FORK 7z archive. "
+            "A native 7-Zip-compatible extractor is required for its BCJ2 filter. "
+            f"Last error: {detail}"
+        ) from exc
 
 
 def _find_file(root, filename, required_parts=()):
