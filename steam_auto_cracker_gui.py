@@ -42,6 +42,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         validate_game_folder,
     )
     from sac_lib.background import run_background
+    from sac_lib.package_builder import build_crack_only_archive
     from sac_lib.steamless_runner import run_modern_steamless
     from sac_lib.tool_updater import (
         get_cached_gbe_dll,
@@ -688,7 +689,11 @@ try: # Handles Python errors to write them to a log file so they can be reported
             files_by_lower = {name.casefold(): name for name in files}
 
             # Use Steamless if configured
-            if config["Preferences"]["Steamless"] == "1" and crackListSteamless[config["Crack"]["SelectedCrack"]]:
+            if (
+                config["Preferences"]["CrackOption"] != "2"
+                and config["Preferences"]["Steamless"] == "1"
+                and crackListSteamless[config["Crack"]["SelectedCrack"]]
+            ):
                 # Run Steamless on every .exe file. If it's not under DRM or not the wrong file, no problem!
                 for fileName in files:
                     if not fileName.casefold().endswith(".exe"):
@@ -839,6 +844,50 @@ try: # Handles Python errors to write them to a log file so they can be reported
             if apiFile != "":
                 cracked = True
                 root.update()
+
+        if config["Preferences"]["CrackOption"] == "2":
+            if not dllLocations:
+                update_logs("\n[!] No Steam API DLL locations were found; crack-only package was not created.")
+                gameFoundStatus.config(text="No Steam API DLL found")
+                EndCrack()
+                return
+
+            dlc_with_spaces = "".join(
+                f"{dlc_id} = {dlc_name}\n"
+                for dlc_id, dlc_name in zip(dlcIDs, dlcNames)
+            )
+            dlc_without_spaces = "".join(
+                f"{dlc_id}={dlc_name}\n"
+                for dlc_id, dlc_name in zip(dlcIDs, dlcNames)
+            )
+            replacements = {
+                "SAC_AppID": str(appID),
+                "SAC_DLC": dlc_with_spaces,
+                "SAC_NoSpaceDLC": dlc_without_spaces,
+            }
+
+            try:
+                archive_path = build_crack_only_archive(
+                    game_root=folder_path,
+                    game_name=gameName,
+                    appid=appID,
+                    template_root=configDir,
+                    dll_locations=dllLocations,
+                    replacements=replacements,
+                    output_dir=get_user_path("crack_only"),
+                    source_overrides=cached_gbe_files,
+                )
+            except Exception as exc:
+                update_logs(f"\n[!] Crack-only package generation failed: {exc}")
+                gameFoundStatus.config(text="Crack-only package failed")
+            else:
+                update_logs(
+                    "\nCrack-only package created without modifying the selected game:\n"
+                    + archive_path
+                )
+                gameFoundStatus.config(text="Crack-only package created")
+            EndCrack()
+            return
 
         for dllCurrentLocation, apiFileVersion in dllLocations.items():
             for root_dir, dirs, files in os.walk(configDir):
@@ -1116,7 +1165,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         CrackOption_var.set(config["Preferences"]["CrackOption"])
         ttk.Radiobutton(settings_frame1, text="Crack the game automatically (RECOMMENDED)", variable=CrackOption_var, value="0", command=lambda: UpdateConfigKey("Preferences", "CrackOption", CrackOption_var.get())).grid(row=0, column=0, sticky="w")
         ttk.Radiobutton(settings_frame1, text="Only create the crack config, and put it in the same directory as steam_api(64).dll", variable=CrackOption_var, value="1", command=lambda: UpdateConfigKey("Preferences", "CrackOption", CrackOption_var.get())).grid(row=1, column=0, sticky="w")
-        ttk.Radiobutton(settings_frame1, text="Only create the crack config, and put it in the same directory as the Steam Auto Cracker tool\n(currently bugged, doesn't work!)", variable=CrackOption_var, value="2", command=lambda: UpdateConfigKey("Preferences", "CrackOption", CrackOption_var.get())).grid(row=2, column=0, sticky="w")
+        ttk.Radiobutton(settings_frame1, text="Build a crack-only ZIP beside SteamAutoCracker (does not modify the selected game)", variable=CrackOption_var, value="2", command=lambda: UpdateConfigKey("Preferences", "CrackOption", CrackOption_var.get())).grid(row=2, column=0, sticky="w")
 
         # Steamless (Steamless)
         ttk.Label(scrollFrame, text="Steamless:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
