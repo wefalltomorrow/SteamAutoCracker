@@ -48,7 +48,9 @@ try: # Handles Python errors to write them to a log file so they can be reported
     from sac_lib.steamless_runner import run_modern_steamless
     from sac_lib.tool_updater import (
         get_cached_gbe_dll,
+        get_cached_gbe_metadata,
         get_cached_steamless_executable,
+        get_cached_steamless_metadata,
         update_gbe_fork,
         update_steamless,
     )
@@ -1113,7 +1115,15 @@ try: # Handles Python errors to write them to a log file so they can be reported
         )
         steamlessUpdateButton.grid(row=0, column=1)
 
-        externalToolsStatus = ttk.Label(externalToolsFrame, text="")
+        gbe_meta = get_cached_gbe_metadata(get_tool_cache_dir()) or {}
+        steamless_meta = get_cached_steamless_metadata(get_tool_cache_dir()) or {}
+        cached_summary = (
+            "GBE_FORK: "
+            + str(gbe_meta.get("version", "bundled fallback"))
+            + " | Steamless: "
+            + str(steamless_meta.get("version", "bundled fallback"))
+        )
+        externalToolsStatus = ttk.Label(externalToolsFrame, text=cached_summary)
         externalToolsStatus.grid(row=1, column=0, columnspan=2, sticky="w")
 
         # FileNames
