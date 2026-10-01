@@ -55,10 +55,18 @@ def build_crack_only_archive(
         package_root = os.path.join(staging, stem)
         os.makedirs(package_root, exist_ok=True)
 
-        for dll_location in sorted(set(dll_locations)):
+        if isinstance(dll_locations, dict):
+            location_items = sorted(dll_locations.items())
+        else:
+            location_items = [(path, "") for path in sorted(set(dll_locations))]
+
+        for dll_location, api_version in location_items:
             dll_location = os.path.realpath(os.path.abspath(dll_location))
             if os.path.commonpath([game_root, dll_location]) != game_root:
                 raise ValueError("Steam API location escapes selected game root")
+
+            location_replacements = dict(replacements)
+            location_replacements["SAC_APIVersion"] = str(api_version or "")
 
             location_rel = os.path.relpath(dll_location, game_root)
             if location_rel == ".":
@@ -86,7 +94,7 @@ def build_crack_only_archive(
                         try:
                             with open(source, "r", encoding="utf-8") as handle:
                                 data = handle.read()
-                            data = _render_text(data, replacements)
+                            data = _render_text(data, location_replacements)
                             with open(target, "w", encoding="utf-8") as handle:
                                 handle.write(data)
                             continue
