@@ -53,7 +53,10 @@ jobs:
         shell: python
         run: |
           import os
+          import sys
           import tempfile
+
+          sys.path.insert(0, os.getcwd())
 
           from sac_lib.restore import (
               discover_legacy_backups,
@@ -89,6 +92,20 @@ jobs:
 
               remove_manifest(root)
               assert load_manifest(root) is None
+
+          with tempfile.TemporaryDirectory() as root:
+              created = os.path.join(root, "SteamConfig.ini")
+              with open(created, "w", encoding="utf-8") as handle:
+                  handle.write("generated")
+
+              record_change(root, created, None)
+              manifest = load_manifest(root)
+              result = restore_entries(root, manifest["entries"])
+              assert result["removed_created"] == ["SteamConfig.ini"]
+              assert not os.path.exists(created)
+              assert len(result["preserved"]) == 1
+              with open(os.path.join(root, result["preserved"][0]), "r", encoding="utf-8") as handle:
+                  assert handle.read() == "generated"
 
           with tempfile.TemporaryDirectory() as root:
               original = os.path.join(root, "game.exe")
