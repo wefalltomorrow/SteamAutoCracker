@@ -465,39 +465,90 @@ try: # Handles Python errors to write them to a log file so they can be reported
         logs_text.config(state=tk.DISABLED)  # Disables modification (prevents the user from writing inside the field)
 
     def search_game():
-        searchGameButton.config(state=tk.DISABLED) # Prevents the user from starting multiple searches at the same time
-        frameCrack2.pack_forget() # Hide the crack frame
-        global gameSearchDone
-        gameSearchDone = False
-
-        gameFoundStatus.config(text=f"")
-        # Disable the ability to change the selected folder
-        selectFolderButton.config(state=tk.DISABLED)
-        updateAppListButton.grid_forget()
-        root.update()
-
-        global appID
-        appID = 0
-        if gameNameEntry.get() == "":
+        query = gameNameEntry.get().strip()
+        if not query:
             update_logs("\n[!] Please enter a valid Name or AppID")
-            searchGameButton.config(state=tk.NORMAL)  # Re-enable the ability to search the game
-            selectFolderButton.config(state=tk.NORMAL) # Re-enable the ability to change the selected folder
             return
 
-        try:
-            appID = int(gameNameEntry.get())
-        except:
-            appID = FindInAppList(gameNameEntry.get())
+        searchGameButton.config(state=tk.DISABLED)
+        selectFolderButton.config(state=tk.DISABLED)
+        installedGamesButton.config(state=tk.DISABLED)
+        frameCrack2.pack_forget()
 
-        if appID != 0 and RetrieveGame(): # On success
-            # We are now on step 3
+        global gameSearchDone
+        gameSearchDone = False
+        gameFoundStatus.config(text="Retrieving Steam metadata...")
+
+        try:
+            retry_max = max(1, min(int(config["Advanced"]["RetryMax"]), 10))
+            retry_delay = max(0.5, min(float(config["Advanced"]["RetryDelay"]), 5.0))
+        except Exception:
+            retry_max = 5
+            retry_delay = 2.0
+
+        def worker():
+            client = SteamStoreClient(retry_max=retry_max, retry_delay=retry_delay)
+            try:
+                resolved_appid = int(query)
+                matched_name = None
+            except ValueError:
+                match = client.search_app(query)
+                if not match:
+                    raise SteamStoreError(
+                        f'No sufficiently close Steam Store match was found for "{query}"'
+                    )
+                resolved_appid = int(match["appid"])
+                matched_name = match["name"]
+
+            metadata = client.game_metadata(resolved_appid)
+            if (
+                config["Advanced"]["BypassGameVerification"] != "1"
+                and metadata.get("type") != "game"
+            ):
+                raise SteamStoreError(
+                    f'AppID {metadata["appid"]} is not reported by Steam as a game'
+                )
+            metadata["matched_name"] = matched_name
+            return metadata
+
+        def success(metadata):
+            global appID
+            global gameName
+            global dlcIDs
+            global dlcNames
+            global gameSearchDone
+
+            appID = int(metadata["appid"])
+            gameName = metadata["name"]
+            dlcs = metadata.get("dlcs") or []
+            dlcIDs = [int(item["appid"]) for item in dlcs]
+            dlcNames = [str(item["name"]) for item in dlcs]
+
+            matched = metadata.get("matched_name")
+            if matched:
+                update_logs(
+                    f'\n- Matched "{query}" to "{matched}" (AppID: {appID})'
+                )
+            update_logs(
+                f'\n- Game found: {gameName} — AppID {appID}; '
+                f'{len(dlcIDs)} DLC entries retrieved.'
+            )
+            gameFoundStatus.config(text=f"All details retrieved for {gameName}!")
             gameSearchDone = True
-            frameCrack2.pack() # Show the crack frame
-            searchGameButton.config(state=tk.NORMAL) # Re-enable the ability to search the game
-            selectFolderButton.config(state=tk.NORMAL) # Re-enable the ability to change the selected folder
-        else:
-            searchGameButton.config(state=tk.NORMAL) # Re-enable the ability to search the game
-            selectFolderButton.config(state=tk.NORMAL) # Re-enable the ability to change the selected folder
+            frameCrack2.pack()
+
+        def failure(exc, details):
+            update_logs(f"\n[!] Steam metadata lookup failed: {exc}")
+            gameFoundStatus.config(text="Steam lookup failed")
+            if isinstance(exc, SteamStoreError):
+                update_logs("\n- Try entering the exact AppID if name matching failed.")
+
+        def finish():
+            searchGameButton.config(state=tk.NORMAL)
+            selectFolderButton.config(state=tk.NORMAL)
+            installedGamesButton.config(state=tk.NORMAL)
+
+        run_background(root, worker, success, failure, finish)
 
     def _normalize_game_name(value):
         value = str(value or "").casefold()
