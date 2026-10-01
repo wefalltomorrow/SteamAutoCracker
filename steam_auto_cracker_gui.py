@@ -5,12 +5,28 @@ import traceback
 try: # Handles Python errors to write them to a log file so they can be reported and fixed more easily.
     ## Replaced by 'ttkbootstrap' for [easier] themes
     #import tkinter as tk
-    from tkinter import ttk, filedialog, font
+    from tkinter import ttk, filedialog, font, messagebox
     from tkinterdnd2 import DND_FILES, TkinterDnD
 
     ## Used for theming/coloring configuration for the UI
     import ttkbootstrap
     import ttkbootstrap as tk
+
+    # ttkbootstrap provides Tk/ttk widgets but not classic tkinter constants
+    # such as BOTH/END/NORMAL at its package root. Keep the historical `tk`
+    # alias working for source runs as well as compiled builds.
+    _TK_COMPAT_CONSTANTS = {
+        "END": "end",
+        "NORMAL": "normal",
+        "DISABLED": "disabled",
+        "LEFT": "left",
+        "RIGHT": "right",
+        "BOTH": "both",
+        "Y": "y",
+    }
+    for _constant_name, _constant_value in _TK_COMPAT_CONSTANTS.items():
+        if not hasattr(tk, _constant_name):
+            setattr(tk, _constant_name, _constant_value)
 
     import requests
     import configparser
@@ -21,6 +37,14 @@ try: # Handles Python errors to write them to a log file so they can be reported
         describe_appdetails_problem,
         extract_appdetails_entry,
     )
+    from sac_lib.restore import (
+        discover_legacy_backups,
+        load_manifest,
+        manifest_path,
+        record_change,
+        remove_manifest,
+        restore_entries,
+    )
     import shutil
     from time import sleep
     from sys import exit
@@ -29,7 +53,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     from difflib import SequenceMatcher
     import typing
 
-    VERSION = "2.3.0-wft.1"
+    VERSION = "2.3.1-wft.1"
 
     RETRY_DELAY = 15 # Delay in seconds before retrying a failed request. (default, can be modified in config.ini)
     RETRY_MAX = 30 # Number of failed tries (includes the first try) after which SAC will stop trying and quit. (default, can be modified in config.ini)
@@ -147,6 +171,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         def reset_folder_selection_ui():
             selectedFolderLabel.config(text="")
             selectedFolderLabel.pack_forget()
+            restoreFilesButton.pack_forget()
             frameGame2.pack_forget()
             frameCrack2.pack_forget() # Hide the crack frame
 
@@ -173,6 +198,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
             update_logs(f"\nSelected folder: {folder_path}")
             selectedFolderLabel.config(text=f"Selected folder:\n{folder_path}")
             selectedFolderLabel.pack()
+            restoreFilesButton.pack(pady=(0, 10))
             frameGame2.pack()
 
             # Update the game name entry with the folder name
@@ -187,6 +213,91 @@ try: # Handles Python errors to write them to a log file so they can be reported
             update_logs("\nNo valid folder selected")
             folder_path = ""
             reset_folder_selection_ui()
+
+    def RestoreOriginalFiles():
+        if not folder_path or not os.path.isdir(folder_path):
+            update_logs("\n[!] Select a valid game folder before restoring files.")
+            return
+
+        try:
+            manifest = load_manifest(folder_path)
+            if manifest:
+                entries = manifest["entries"]
+                source = "SAC restore manifest"
+            else:
+                entries = discover_legacy_backups(
+                    folder_path,
+                    config["FileNames"]["SteamAPI"],
+                    config["FileNames"]["SteamAPI64"],
+                    config["FileNames"]["GameEXE"],
+                )
+                source = "legacy backup discovery"
+        except Exception as exc:
+            update_logs(f"\n[!] Could not inspect restore data: {exc}")
+            return
+
+        if not entries:
+            update_logs("\nNo restorable SAC backups were found in the selected folder.")
+            return
+
+        if not messagebox.askyesno(
+            "Restore original files",
+            "Restore original files in the selected folder?\n\n"
+            "Current modified files will be preserved with a .sac-replaced suffix "
+            "instead of being deleted.",
+        ):
+            return
+
+        selectFolderButton.config(state=tk.DISABLED)
+        searchGameButton.config(state=tk.DISABLED)
+        selectCrackButton.config(state=tk.DISABLED)
+        crackGameButton.config(state=tk.DISABLED)
+        restoreFilesButton.config(state=tk.DISABLED)
+        root.update()
+
+        update_logs(f"\nRestoring original files using {source}...")
+        if not manifest:
+            update_logs(
+                "\n[!] Legacy restore can only identify known backup pairs. "
+                "Additional files created by older SAC builds may remain and are not removed automatically."
+            )
+        try:
+            result = restore_entries(folder_path, entries)
+
+            for restored_path in result["restored"]:
+                update_logs(f"\n- Restored original: {restored_path}")
+            for created_path in result["removed_created"]:
+                update_logs(f"\n- Removed SAC-created file from active path: {created_path}")
+            for preserved_path in result["preserved"]:
+                update_logs(f"\n- Preserved modified file as: {preserved_path}")
+            for skipped in result["skipped"]:
+                update_logs(
+                    "\n[!] Skipped restore entry: "
+                    + str(skipped.get("entry"))
+                    + " ("
+                    + str(skipped.get("reason"))
+                    + ")"
+                )
+
+            if manifest and not result["skipped"]:
+                remove_manifest(folder_path)
+
+            update_logs(
+                f"\nRestore finished: {len(result['restored'])} originals restored, "
+                f"{len(result['removed_created'])} SAC-created files removed from active paths, "
+                f"{len(result['preserved'])} modified files preserved, "
+                f"{len(result['skipped'])} skipped."
+            )
+        except Exception as exc:
+            update_logs(f"\n[!] Restore failed: {exc}")
+        finally:
+            selectFolderButton.config(state=tk.NORMAL)
+            searchGameButton.config(state=tk.NORMAL)
+            selectCrackButton.config(state=tk.NORMAL)
+            crackGameButton.config(state=tk.NORMAL)
+            restoreFilesButton.config(state=tk.NORMAL)
+            root.update()
+
 
     def update_logs(log_message):
         # Get current content
@@ -528,9 +639,39 @@ try: # Handles Python errors to write them to a log file so they can be reported
         searchGameButton.config(state=tk.DISABLED)
         selectCrackButton.config(state=tk.DISABLED)
         crackGameButton.config(state=tk.DISABLED)
+        restoreFilesButton.config(state=tk.DISABLED)
 
-        update_logs("\nSearching Steam API DLLs and cracking them...")
+        # Do not risk overwriting the only known-good originals from an earlier run.
+        try:
+            previous_manifest = load_manifest(folder_path)
+            legacy_backups = discover_legacy_backups(
+                folder_path,
+                config["FileNames"]["SteamAPI"],
+                config["FileNames"]["SteamAPI64"],
+                config["FileNames"]["GameEXE"],
+            )
+        except Exception as exc:
+            update_logs(f"\n[!] Could not inspect existing backups: {exc}")
+            EndCrack()
+            return
+
+        if previous_manifest or legacy_backups:
+            update_logs(
+                "\n[!] Existing SAC restore data/backups were found. "
+                "Restore the original files before modifying this folder again."
+            )
+            gameFoundStatus.config(text="Restore originals before another modification")
+            EndCrack()
+            return
+
+        update_logs("\nApplying selected file modifications...")
         cracked = False
+        steamless_attempted = 0
+        steamless_succeeded = 0
+        steamless_failed = 0
+        api_replacements = 0
+        backup_count = 0
+        created_count = 0
 
         if config["Crack"]["SelectedCrack"][:3] == "dlc" and len(dlcIDs) == 0: # If a dlc only crack has been selected, but the game has no DLC
             update_logs("-----\nNo DLC is available, and you selected a DLC only crack. Aborting the cracking process.")
@@ -564,6 +705,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
                 for fileName in files:
                     if not fileName.endswith(".exe"):
                         continue
+                    steamless_attempted += 1
                     update_logs(f"- Attempting to run Steamless on {fileName}")
                     root.update()
                     #update_logs("\n[[[ Steamless logs ]]]")
@@ -581,15 +723,31 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     # Check if the game was NOT unpacked
                     if not os.path.isfile(fileName + ".unpacked.exe"):
                         # Move back the original game's exe since it didn't change
-                        update_logs("- Couldn't run Steamless on " + fileName + ", it is probably not under DRM.")
+                        steamless_failed += 1
+                        update_logs("- Steamless did not produce an unpacked executable for " + fileName + ".")
                         shutil.move(fileName, fileLocation)
                         root.update()
                         continue
 
-                    update_logs(f"- Removed Steam Stub DRM from {fileName}")
+                    steamless_succeeded += 1
+                    update_logs(f"- Steamless produced an unpacked executable for {fileName}")
                     if config["FileNames"]["GameEXE"] != "":
                         # Rename and move back the original game's exe
-                        shutil.move(fileName, fileLocation + config["FileNames"]["GameEXE"])
+                        exe_backup = fileLocation + config["FileNames"]["GameEXE"]
+                        if os.path.exists(exe_backup):
+                            update_logs(
+                                f"[!] Refusing to overwrite existing executable backup: {exe_backup}. "
+                                "Restore originals first."
+                            )
+                            os.remove(fileName + ".unpacked.exe")
+                            shutil.move(fileName, fileLocation)
+                            steamless_succeeded -= 1
+                            steamless_failed += 1
+                            root.update()
+                            continue
+                        shutil.move(fileName, exe_backup)
+                        record_change(folder_path, fileLocation, exe_backup)
+                        backup_count += 1
                     else:
                         # Delete the original game's exe
                         os.remove(fileName)
@@ -655,7 +813,9 @@ try: # Handles Python errors to write them to a log file so they can be reported
                 # Create all files
                 for fileName in files:
                     root.update()
-                    if os.path.isfile(os.path.join(dllAbsoluteRelativeLocation, fileName)): # The file already exists in the game, rename it to .bak
+                    target_path = os.path.join(dllAbsoluteRelativeLocation, fileName)
+                    target_existed_before = os.path.isfile(target_path)
+                    if target_existed_before: # The file already exists in the game, rename it to .bak
                         newName = fileName + config["FileNames"]["BakSuffix"]
                         if fileName == "steam_api.dll" or fileName == "steam_api64.dll":
                             if config["Preferences"]["CrackOption"] != "0": # Only create config
@@ -670,16 +830,33 @@ try: # Handles Python errors to write them to a log file so they can be reported
                         if newName == "": # Don't keep a backup of the steam_api(64).dll file
                             os.remove(os.path.join(dllAbsoluteRelativeLocation, fileName))
                             update_logs("Removed old " + relativeRootDir + fileName + " file because no backup file name is set")
-                        elif os.path.isfile(os.path.join(dllAbsoluteRelativeLocation, newName)): # A backup of this file already exists, the game might already be cracked, abort!
-                            update_logs("[!] Seems like the backup of " + relativeRootDir + fileName + " file already exists! This could indicate that the game has already been cracked. Overwriting it. No backup of " + relativeRootDir + fileName + " could be created, and the file has been deleted.")
-                            os.remove(os.path.join(dllAbsoluteRelativeLocation, fileName))
+                        elif os.path.isfile(os.path.join(dllAbsoluteRelativeLocation, newName)): # Never overwrite the only known-good backup
+                            update_logs(
+                                "[!] Existing backup found for "
+                                + relativeRootDir + fileName
+                                + ". Refusing to overwrite it. Restore original files first."
+                            )
+                            gameFoundStatus.config(text="Existing backup found — restore originals first")
+                            EndCrack()
+                            return
                         else:
-                            shutil.move(os.path.join(dllAbsoluteRelativeLocation, fileName), os.path.join(dllAbsoluteRelativeLocation, newName))
-                            update_logs("Backupped old file " + relativeRootDir + fileName + " -> " + newName)
+                            original_path = os.path.join(dllAbsoluteRelativeLocation, fileName)
+                            backup_path = os.path.join(dllAbsoluteRelativeLocation, newName)
+                            shutil.move(original_path, backup_path)
+                            record_change(folder_path, original_path, backup_path)
+                            backup_count += 1
+                            update_logs("Backed up old file " + relativeRootDir + fileName + " -> " + newName)
                     elif fileName == "steam_api.dll" or fileName == "steam_api64.dll": # No existing file, and this file is the steam_api(64).dll one
                         continue # Ignore this file
 
-                    shutil.copyfile(os.path.join(root_dir, fileName), os.path.join(dllAbsoluteRelativeLocation, fileName))
+                    if not target_existed_before:
+                        record_change(folder_path, target_path, None)
+                        created_count += 1
+
+                    shutil.copyfile(os.path.join(root_dir, fileName), target_path)
+
+                    if fileName in ("steam_api.dll", "steam_api64.dll"):
+                        api_replacements += 1
 
                     # Check if ends with a specific extension, so we can replace the presets inside
                     if any(fileName.endswith(extension) for extension in EXTS_TO_REPLACE):
@@ -706,11 +883,32 @@ try: # Handles Python errors to write them to a log file so they can be reported
                     update_logs("Created new file " + relativeRootDir + fileName)
 
 
-        update_logs("\n-----\nFinished cracking the game!")
+        update_logs("\n-----\nModification pass finished.")
+        update_logs(
+            f"Summary — Steamless: {steamless_succeeded}/{steamless_attempted} produced an unpacked EXE; "
+            f"Steam API replacements: {api_replacements}; backups preserved: {backup_count}; "
+            f"new files tracked: {created_count}."
+        )
+
         if not cracked:
-            update_logs("[!] No Steam API DLL was found in the game!")
+            update_logs("[!] No Steam API DLL was found in the selected folder.")
+            gameFoundStatus.config(text="No Steam API DLL found")
+        elif steamless_failed > 0:
+            update_logs(
+                "[!] Completed with warnings. One or more executables were not processed by Steamless. "
+                "Files may have been modified, but launch compatibility has NOT been verified."
+            )
+            gameFoundStatus.config(text="Completed with warnings — launch not verified")
         else:
-            update_logs("The game has been cracked successfully! (If you attempt to crack if again, SAC will try its best to make it work, but will let some leftovers of old cracks.)")
+            update_logs(
+                "File modifications completed. Launch compatibility has NOT been verified."
+            )
+            gameFoundStatus.config(text="Files modified — launch not verified")
+
+        if os.path.isfile(manifest_path(folder_path)):
+            update_logs(
+                "\nA restore manifest was saved. Use 'Restore original files' before another modification pass."
+            )
 
         EndCrack()
 
@@ -723,6 +921,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
         searchGameButton.config(state=tk.NORMAL)
         selectCrackButton.config(state=tk.NORMAL)
         crackGameButton.config(state=tk.NORMAL)
+        if folder_path and os.path.isdir(folder_path):
+            restoreFilesButton.config(state=tk.NORMAL)
 
 
     # Theming
@@ -1225,6 +1425,14 @@ try: # Handles Python errors to write them to a log file so they can be reported
     selectedFolderLabel = tk.Label(selectedFolderFrame, text="", wraplength=700)
     selectedFolderLabel.pack()
     selectedFolderLabel.pack_forget()
+
+    restoreFilesButton = ttk.Button(
+        root,
+        text="Restore original files",
+        padding=5,
+        command=RestoreOriginalFiles,
+    )
+    restoreFilesButton.pack_forget()
 
     # Enter game name or appID fields
     frameGame = ttk.Frame(root) # Main frame for the game

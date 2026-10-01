@@ -48,6 +48,110 @@ jobs:
               assert getattr(tk, name) == value, (name, getattr(tk, name, None))
           print("ttkbootstrap compatibility hook OK")
 
+
+      - name: Regression test restore manifest and preservation
+        shell: python
+        run: |
+          import os
+          import sys
+          import tempfile
+
+          sys.path.insert(0, os.getcwd())
+
+          from sac_lib.restore import (
+              discover_legacy_backups,
+              load_manifest,
+              record_change,
+              remove_manifest,
+              restore_entries,
+              safe_join,
+          )
+
+          with tempfile.TemporaryDirectory() as root:
+              original = os.path.join(root, "steam_api.dll")
+              backup = os.path.join(root, "steam_api.dll.bak")
+
+              with open(original, "w", encoding="utf-8") as handle:
+                  handle.write("modified")
+              with open(backup, "w", encoding="utf-8") as handle:
+                  handle.write("original")
+
+              record_change(root, original, backup)
+              manifest = load_manifest(root)
+              assert len(manifest["entries"]) == 1
+
+              result = restore_entries(root, manifest["entries"])
+              assert result["skipped"] == []
+              assert result["restored"] == ["steam_api.dll"]
+              assert len(result["preserved"]) == 1
+
+              with open(original, "r", encoding="utf-8") as handle:
+                  assert handle.read() == "original"
+              with open(os.path.join(root, result["preserved"][0]), "r", encoding="utf-8") as handle:
+                  assert handle.read() == "modified"
+
+              remove_manifest(root)
+              assert load_manifest(root) is None
+
+          with tempfile.TemporaryDirectory() as root:
+              created = os.path.join(root, "SteamConfig.ini")
+              with open(created, "w", encoding="utf-8") as handle:
+                  handle.write("generated")
+
+              record_change(root, created, None)
+              manifest = load_manifest(root)
+              result = restore_entries(root, manifest["entries"])
+              assert result["removed_created"] == ["SteamConfig.ini"]
+              assert not os.path.exists(created)
+              assert len(result["preserved"]) == 1
+              with open(os.path.join(root, result["preserved"][0]), "r", encoding="utf-8") as handle:
+                  assert handle.read() == "generated"
+
+          with tempfile.TemporaryDirectory() as root:
+              original = os.path.join(root, "game.exe")
+              backup = original + ".bak"
+              open(original, "wb").close()
+              open(backup, "wb").close()
+
+              found = discover_legacy_backups(root, exe_backup_suffix=".bak")
+              assert {
+                  "original": "game.exe",
+                  "backup": "game.exe.bak",
+              } in found
+
+              try:
+                  safe_join(root, "../escape.txt")
+                  raise AssertionError("safe_join allowed path traversal")
+              except ValueError:
+                  pass
+
+              outside = os.path.abspath(os.path.join(root, "..", "outside.txt"))
+              try:
+                  record_change(root, outside, None)
+                  raise AssertionError("record_change allowed a path outside the selected root")
+              except ValueError:
+                  pass
+
+              same = {
+                  "original": "game.exe",
+                  "backup": "game.exe",
+              }
+              result = restore_entries(root, [same])
+              assert result["restored"] == []
+              assert result["skipped"][0]["reason"] == "backup path equals original path"
+
+          print("restore regression OK")
+
+      - name: Regression test truthful completion status
+        shell: python
+        run: |
+          from pathlib import Path
+
+          source = Path("steam_auto_cracker_gui.py").read_text(encoding="utf-8")
+          assert "The game has been cracked successfully!" not in source
+          assert "launch compatibility has NOT been verified" in source
+          assert "Restore original files" in source
+          print("truthful outcome reporting regression OK")
       - name: Exercise portable PE version helper
         run: python -c "import os; from sac_lib.get_file_version import GetFileVersion; print(GetFileVersion(os.path.join(os.environ['WINDIR'], 'System32', 'kernel32.dll')))"
 

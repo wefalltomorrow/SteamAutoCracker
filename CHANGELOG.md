@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.3.1-wft.1 — 2026-10-01
+
+### Added
+
+- **Restore original files** button available immediately after selecting a folder.
+- Per-folder `.steamautocracker_restore.json` manifests for files changed by this release.
+- Safe restore behavior that preserves the currently modified file as `.sac-replaced` before putting the original backup back.
+- Conservative legacy-backup discovery for `steam_api.dll.bak`, `steam_api64.dll.bak`, and executable backups.
+- CI regression tests for restore behavior, traversal protection, truthful completion messages, and source/runtime theme compatibility.
+
+### Changed
+
+- Completion reporting now describes the actual file operations performed instead of claiming launch success.
+- Runs that contain incomplete executable processing report **Completed with warnings — launch not verified**.
+- Existing restore manifests/backups block another modification pass until originals are restored.
+- Existing known-good backup files are never overwritten.
+- The ttkbootstrap constant compatibility shim is now present in the source as well as the compiled-build runtime hook.
+
+### Restore behavior
+
+- Manifest-backed restores can undo both replaced files and files created by this release.
+- Modified files being replaced during restore are preserved using a unique `.sac-replaced` sidecar name.
+- Legacy restore mode intentionally restores only confidently identified backup pairs; it does not guess at unrelated files created by older versions.
+
 All notable changes to the wefalltomorrow SteamAutoCracker fork are documented here.
 
 ## 2.3.0-wft.1 — 2026-10-01
