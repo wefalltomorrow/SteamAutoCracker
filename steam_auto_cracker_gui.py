@@ -713,6 +713,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
                     # Modern verified Steamless releases can process the original path
                     # in-place, so SAC no longer needs to temporarily move the EXE.
+                    modern_steamless_succeeded = False
                     if cached_steamless:
                         try:
                             result = run_modern_steamless(
@@ -721,51 +722,54 @@ try: # Handles Python errors to write them to a log file so they can be reported
                                 steamlessOptions.strip(),
                             )
                         except Exception as exc:
-                            steamless_failed += 1
-                            update_logs(f"- Steamless failed on {fileName}: {exc}")
-                            root.update()
-                            continue
+                            update_logs(
+                                f"- Modern Steamless could not run on {fileName}: {exc}"
+                            )
+                            update_logs(
+                                "\n  Falling back to the bundled Steamless compatibility build."
+                            )
+                        else:
+                            unpacked_path = result["output_path"]
+                            if result["unpacked"]:
+                                steamless_succeeded += 1
+                                modern_steamless_succeeded = True
+                                update_logs(
+                                    f"- Modern Steamless unpacked {fileName} in place "
+                                    f"(exit {result['returncode']})."
+                                )
 
-                        unpacked_path = result["output_path"]
-                        if not result["unpacked"]:
-                            steamless_failed += 1
+                                if config["FileNames"]["GameEXE"] != "":
+                                    exe_backup = fileLocation + config["FileNames"]["GameEXE"]
+                                    if os.path.exists(exe_backup):
+                                        update_logs(
+                                            f"[!] Refusing to overwrite existing executable backup: {exe_backup}. "
+                                            "Restore originals first."
+                                        )
+                                        os.remove(unpacked_path)
+                                        steamless_succeeded -= 1
+                                        steamless_failed += 1
+                                        root.update()
+                                        continue
+                                    shutil.move(fileLocation, exe_backup)
+                                    record_change(folder_path, fileLocation, exe_backup)
+                                    backup_count += 1
+                                else:
+                                    os.remove(fileLocation)
+
+                                shutil.move(unpacked_path, fileLocation)
+                                root.update()
+                                continue
+
                             detail = (result["stderr"] or result["stdout"]).strip()
                             update_logs(
-                                f"- Steamless did not unpack {fileName} "
+                                f"- Modern Steamless did not unpack {fileName} "
                                 f"(exit {result['returncode']})."
                             )
                             if detail:
                                 update_logs("\n  " + detail.splitlines()[-1])
-                            root.update()
-                            continue
-
-                        steamless_succeeded += 1
-                        update_logs(
-                            f"- Steamless unpacked {fileName} in place "
-                            f"(exit {result['returncode']})."
-                        )
-
-                        if config["FileNames"]["GameEXE"] != "":
-                            exe_backup = fileLocation + config["FileNames"]["GameEXE"]
-                            if os.path.exists(exe_backup):
-                                update_logs(
-                                    f"[!] Refusing to overwrite existing executable backup: {exe_backup}. "
-                                    "Restore originals first."
-                                )
-                                os.remove(unpacked_path)
-                                steamless_succeeded -= 1
-                                steamless_failed += 1
-                                root.update()
-                                continue
-                            shutil.move(fileLocation, exe_backup)
-                            record_change(folder_path, fileLocation, exe_backup)
-                            backup_count += 1
-                        else:
-                            os.remove(fileLocation)
-
-                        shutil.move(unpacked_path, fileLocation)
-                        root.update()
-                        continue
+                            update_logs(
+                                "\n  Falling back to the bundled Steamless compatibility build."
+                            )
 
                     # Legacy bundled Steamless path retained as a compatibility fallback.
                     shutil.move(fileLocation, fileName)
@@ -1136,7 +1140,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         ttk.Label(scrollFrame, text="Maintained external tools:", font=FONT3, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
         ttk.Label(
             scrollFrame,
-            text="Optional verified updates are stored beside SAC, not inside the game. Downloads are checked against GitHub's reported size and SHA-256 digest.",
+            text="Optional verified updates are stored beside SAC, not inside the game. Downloads are checked against GitHub's reported size and SHA-256 digest. Modern Steamless-KR needs .NET 9; SAC falls back to the bundled compatibility build if it cannot run.",
             font=FONT4,
             padding=0,
             foreground="#575757",
