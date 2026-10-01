@@ -1147,6 +1147,44 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     # ----- Settings -----
 
+    def _update_external_tool(button, status_label, tool_name, worker):
+        button.config(state=tk.DISABLED)
+        status_label.config(text=f"Updating {tool_name}...")
+
+        def success(metadata):
+            version = metadata.get("version", "unknown")
+            digest = metadata.get("asset_sha256", "")
+            short_digest = digest[:12] + "..." if digest else "not supplied"
+            status_label.config(text=f"{tool_name} ready: {version}")
+            update_logs(
+                f"\n- {tool_name} updated to {version}; verified asset SHA-256 {short_digest}"
+            )
+
+        def failure(exc, details):
+            status_label.config(text=f"{tool_name} update failed")
+            update_logs(f"\n[!] {tool_name} update failed: {exc}\n{details}")
+
+        def finish():
+            button.config(state=tk.NORMAL)
+
+        run_background(root, worker, success, failure, finish)
+
+    def UpdateGBEFork():
+        _update_external_tool(
+            gbeUpdateButton,
+            externalToolsStatus,
+            "GBE_FORK",
+            lambda: update_gbe_fork(get_tool_cache_dir()),
+        )
+
+    def UpdateSteamless():
+        _update_external_tool(
+            steamlessUpdateButton,
+            externalToolsStatus,
+            "Steamless",
+            lambda: update_steamless(get_tool_cache_dir()),
+        )
+
     def SettingsButton():
         top = tk.Toplevel(root)
         #top.geometry("750x250")
