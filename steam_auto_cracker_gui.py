@@ -1109,13 +1109,13 @@ try: # Handles Python errors to write them to a log file so they can be reported
         scrollFrame = ttk.Frame(scrollCanvas)
         scrollCanvas.create_window((0,0), window=scrollFrame, anchor="nw")
 
-        # Damn don't ask me how all of this works. It just does :D
+        # Scrollable settings panel.
         scrollbar = tk.Scrollbar(top, command=scrollCanvas.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         scrollCanvas.config(yscrollcommand=scrollbar.set)
 
         def on_mousewheel(event):
-            scrollCanvas.yview_scroll(int(-1*(event.delta/120)), "units") # Some magic I guess. Huge thanks to LLM who probably stole this code from someone.
+            scrollCanvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
         top.bind("<MouseWheel>", on_mousewheel)
 
@@ -1587,7 +1587,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     ApplyStyle()
 
     ttk.Label(root, text=f"SteamAutoCracker GUI v{VERSION}", font=FONT2, padding=0).pack(pady=(10, 0), anchor="center")
-    ttk.Label(root, text="BigBoiCJ base · wefalltomorrow best-of-all fork", padding=0).pack(pady=(0, 0), anchor="center")
+    ttk.Label(root, text="BigBoiCJ base · maintained by wefalltomorrow", padding=0).pack(pady=(0, 0), anchor="center")
 
     updatesFrame = tk.Frame(root)
     updatesButton = ttk.Button(updatesFrame, text="Check for updates", command=CheckUpdates, padding=0)
