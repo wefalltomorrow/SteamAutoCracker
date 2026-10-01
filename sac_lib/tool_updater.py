@@ -182,38 +182,47 @@ def update_gbe_fork(cache_root):
     )
 
     target = gbe_cache_dir(cache_root)
-    os.makedirs(target, exist_ok=True)
+    staging = target + ".staging"
+    shutil.rmtree(staging, ignore_errors=True)
+    os.makedirs(staging, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="sac-gbe-") as temp:
-        archive = os.path.join(temp, asset["name"])
-        digest = _download(
-            asset["browser_download_url"],
-            archive,
-            asset.get("size") or 0,
-            asset.get("digest") or "",
-        )
-        extracted = os.path.join(temp, "extracted")
-        os.makedirs(extracted)
-        _extract_7z(archive, extracted)
-
-        dll32 = _find_file(extracted, "steam_api.dll", ("regular", "x86"))
-        dll64 = _find_file(extracted, "steam_api64.dll", ("regular", "x64"))
-        if not dll32 or not dll64:
-            raise ToolUpdateError(
-                "GBE_FORK release did not contain regular x86/x64 Steam API DLLs"
+    try:
+        with tempfile.TemporaryDirectory(prefix="sac-gbe-") as temp:
+            archive = os.path.join(temp, asset["name"])
+            digest = _download(
+                asset["browser_download_url"],
+                archive,
+                asset.get("size") or 0,
+                asset.get("digest") or "",
             )
+            extracted = os.path.join(temp, "extracted")
+            os.makedirs(extracted)
+            _extract_7z(archive, extracted)
 
-        shutil.copy2(dll32, os.path.join(target, "steam_api.dll"))
-        shutil.copy2(dll64, os.path.join(target, "steam_api64.dll"))
+            dll32 = _find_file(extracted, "steam_api.dll", ("regular", "x86"))
+            dll64 = _find_file(extracted, "steam_api64.dll", ("regular", "x64"))
+            if not dll32 or not dll64:
+                raise ToolUpdateError(
+                    "GBE_FORK release did not contain regular x86/x64 Steam API DLLs"
+                )
 
-    metadata = {
-        "repo": "Detanup01/gbe_fork",
-        "version": release["tag_name"],
-        "asset": asset["name"],
-        "asset_sha256": digest,
-    }
-    _write_metadata(os.path.join(target, "metadata.json"), metadata)
-    return metadata
+            shutil.copy2(dll32, os.path.join(staging, "steam_api.dll"))
+            shutil.copy2(dll64, os.path.join(staging, "steam_api64.dll"))
+
+        metadata = {
+            "repo": "Detanup01/gbe_fork",
+            "version": release["tag_name"],
+            "asset": asset["name"],
+            "asset_sha256": digest,
+        }
+        _write_metadata(os.path.join(staging, "metadata.json"), metadata)
+
+        shutil.rmtree(target, ignore_errors=True)
+        os.replace(staging, target)
+        return metadata
+    finally:
+        if os.path.isdir(staging):
+            shutil.rmtree(staging, ignore_errors=True)
 
 
 def update_steamless(cache_root):
@@ -227,34 +236,40 @@ def update_steamless(cache_root):
     shutil.rmtree(staging, ignore_errors=True)
     os.makedirs(staging, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="sac-steamless-") as temp:
-        archive = os.path.join(temp, asset["name"])
-        digest = _download(
-            asset["browser_download_url"],
-            archive,
-            asset.get("size") or 0,
-            asset.get("digest") or "",
+    try:
+        with tempfile.TemporaryDirectory(prefix="sac-steamless-") as temp:
+            archive = os.path.join(temp, asset["name"])
+            digest = _download(
+                asset["browser_download_url"],
+                archive,
+                asset.get("size") or 0,
+                asset.get("digest") or "",
+            )
+            _extract_zip(archive, staging)
+
+        executable = (
+            _find_file(staging, "Steamless.CLI.exe")
+            or _find_file(staging, "Steamless.exe")
         )
-        _extract_zip(archive, staging)
+        if not executable:
+            raise ToolUpdateError(
+                "Steamless release did not contain a Windows executable"
+            )
 
-    executable = (
-        _find_file(staging, "Steamless.CLI.exe")
-        or _find_file(staging, "Steamless.exe")
-    )
-    if not executable:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise ToolUpdateError("Steamless release did not contain a Windows executable")
+        relative_executable = os.path.relpath(executable, staging)
+        metadata = {
+            "repo": "K0oRui/Steamless-KR",
+            "version": release["tag_name"],
+            "asset": asset["name"],
+            "asset_sha256": digest,
+            "executable": relative_executable,
+        }
+        _write_metadata(os.path.join(staging, "metadata.json"), metadata)
 
-    relative_executable = os.path.relpath(executable, staging)
-    shutil.rmtree(target, ignore_errors=True)
-    os.replace(staging, target)
+        shutil.rmtree(target, ignore_errors=True)
+        os.replace(staging, target)
+        return metadata
+    finally:
+        if os.path.isdir(staging):
+            shutil.rmtree(staging, ignore_errors=True)
 
-    metadata = {
-        "repo": "K0oRui/Steamless-KR",
-        "version": release["tag_name"],
-        "asset": asset["name"],
-        "asset_sha256": digest,
-        "executable": relative_executable,
-    }
-    _write_metadata(os.path.join(target, "metadata.json"), metadata)
-    return metadata
