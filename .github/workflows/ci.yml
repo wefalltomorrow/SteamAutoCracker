@@ -250,6 +250,64 @@ jobs:
 
           print("verified tool updater helper regression OK")
 
+      - name: Regression test crack-only package builder
+        shell: python
+        run: |
+          import os
+          import sys
+          import tempfile
+          import zipfile
+
+          sys.path.insert(0, os.getcwd())
+
+          from sac_lib.package_builder import build_crack_only_archive
+
+          with tempfile.TemporaryDirectory() as root:
+              game = os.path.join(root, "game")
+              dll_dir = os.path.join(game, "bin", "win64")
+              template = os.path.join(root, "template")
+              output = os.path.join(root, "output")
+              os.makedirs(dll_dir)
+              os.makedirs(os.path.join(template, "steam_settings"))
+
+              with open(os.path.join(template, "steam_api64.dll"), "wb") as handle:
+                  handle.write(b"bundled")
+              with open(os.path.join(template, "steam_settings", "steam_appid.txt"), "w", encoding="utf-8") as handle:
+                  handle.write("SAC_AppID")
+              with open(os.path.join(template, "steam_settings", "DLC.txt"), "w", encoding="utf-8") as handle:
+                  handle.write("SAC_NoSpaceDLC")
+
+              override = os.path.join(root, "override.dll")
+              with open(override, "wb") as handle:
+                  handle.write(b"updated")
+
+              archive = build_crack_only_archive(
+                  game_root=game,
+                  game_name='Example: Game',
+                  appid=123,
+                  template_root=template,
+                  dll_locations={dll_dir: "1.2.3.4"},
+                  replacements={
+                      "SAC_AppID": "123",
+                      "SAC_DLC": "456 = DLC Name\n",
+                      "SAC_NoSpaceDLC": "456=DLC Name\n",
+                  },
+                  output_dir=output,
+                  source_overrides={"steam_api64.dll": override},
+              )
+
+              assert os.path.isfile(archive)
+              assert not os.path.exists(os.path.join(dll_dir, "steam_settings"))
+
+              with zipfile.ZipFile(archive) as zf:
+                  names = zf.namelist()
+                  appid_name = next(name for name in names if name.endswith("steam_settings/steam_appid.txt"))
+                  dll_name = next(name for name in names if name.endswith("steam_api64.dll"))
+                  assert zf.read(appid_name).decode("utf-8") == "123"
+                  assert zf.read(dll_name) == b"updated"
+
+          print("crack-only package regression OK")
+
       - name: Regression test maintenance CLI
         shell: pwsh
         run: |
