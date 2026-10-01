@@ -13,12 +13,12 @@ v2.4.0-wft.1 folds the strongest maintainable ideas from [SteamAutoCracks/Steam-
 
 ### Highlights
 
-- **Installed Steam games browser** — discovers Steam libraries from the registry/default paths and `libraryfolders.vdf`, parses `appmanifest_*.acf`, shows AppID/build ID/path, and can fill the selected game automatically.
+- **Installed Steam games browser** — discovers Steam libraries from the registry/default paths and `libraryfolders.vdf`, parses `appmanifest_*.acf`, shows AppID/build ID/path, can fill the selected game automatically, and supports multi-select batch preflight.
 - **Automatic selected-folder AppID matching** when the folder is a normal `steamapps/common/<installdir>` game.
 - **Recursive Steam API validation** for nested `steam_api.dll` / `steam_api64.dll` layouts, plus root-drive protection so an entire drive cannot be selected accidentally.
 - **Background Steam metadata lookup** so Store/AppDetails/DLC network work no longer freezes the Tk UI.
 - **Maintained GBE_FORK support** — Settings can download the latest Windows release from `Detanup01/gbe_fork`, verify GitHub's reported size/SHA-256 digest, stage/extract it safely, and prefer the verified x86/x64 DLLs automatically.
-- **Maintained Steamless-KR support** — Settings can download the latest `K0oRui/Steamless-KR` Windows release with the same verification and safe extraction. Cached modern Steamless builds run against the original EXE path in-place and report the real CLI exit code.
+- **Maintained Steamless-KR support** — Settings can download the latest `K0oRui/Steamless-KR` Windows release with the same verification and safe extraction. Cached modern Steamless builds run against the original EXE path in-place and report the real CLI exit code. Steamless-KR currently requires the .NET 9 runtime; if the modern tool cannot run or cannot unpack a target, SAC falls back to its bundled compatibility build.
 - **Persistent tool cache** beside SAC; optional external tool updates never overwrite the bundled fallback files.
 - **Maintenance CLI** (`steam_auto_cracker_cli.exe` in compiled releases) for installed-game listing, folder validation, metadata diagnostics, safe restore inspection/execution, and verified tool updates.
 - **Existing v2.3.1 restore safety remains intact**: per-folder restore manifests, path-traversal protection, backup overwrite prevention, `.sac-replaced` preservation, and truthful completion summaries.
