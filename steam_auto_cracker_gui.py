@@ -402,6 +402,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
             return
 
         selectFolderButton.config(state=tk.DISABLED)
+        installedGamesButton.config(state=tk.DISABLED)
         searchGameButton.config(state=tk.DISABLED)
         selectCrackButton.config(state=tk.DISABLED)
         crackGameButton.config(state=tk.DISABLED)
@@ -445,6 +446,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
             update_logs(f"\n[!] Restore failed: {exc}")
         finally:
             selectFolderButton.config(state=tk.NORMAL)
+            installedGamesButton.config(state=tk.NORMAL)
             searchGameButton.config(state=tk.NORMAL)
             selectCrackButton.config(state=tk.NORMAL)
             crackGameButton.config(state=tk.NORMAL)
