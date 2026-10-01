@@ -108,27 +108,48 @@ def _extract_7z(archive, destination):
         _safe_join(destination, name)
 
     extractors = []
+    seven_zip_candidates = []
     for command in ("7z", "7zz", "7za"):
         executable = shutil.which(command)
         if executable:
-            extractors.append(
-                (
-                    executable,
-                    [executable, "x", archive, f"-o{destination}", "-y", "-bd"],
-                )
-            )
-            break
+            seven_zip_candidates.append(executable)
 
-    # Windows 10/11 ship bsdtar, whose libarchive backend can read 7z/BCJ2.
-    if not extractors:
-        tar_exe = shutil.which("tar")
-        if tar_exe:
-            extractors.append(
-                (
-                    tar_exe,
-                    [tar_exe, "-xf", archive, "-C", destination],
-                )
+    if os.name == "nt":
+        for env_name in ("ProgramFiles", "ProgramFiles(x86)"):
+            base = os.environ.get(env_name)
+            if base:
+                candidate = os.path.join(base, "7-Zip", "7z.exe")
+                if os.path.isfile(candidate):
+                    seven_zip_candidates.append(candidate)
+
+    seen_extractors = set()
+    for executable in seven_zip_candidates:
+        key = os.path.normcase(os.path.abspath(executable))
+        if key in seen_extractors:
+            continue
+        seen_extractors.add(key)
+        extractors.append(
+            (
+                executable,
+                [executable, "x", archive, f"-o{destination}", "-y", "-bd"],
             )
+        )
+
+    # Windows 10/11 ship bsdtar as tar.exe; libarchive can read 7z/BCJ2.
+    for command in ("tar", "bsdtar"):
+        tar_exe = shutil.which(command)
+        if not tar_exe:
+            continue
+        key = os.path.normcase(os.path.abspath(tar_exe))
+        if key in seen_extractors:
+            continue
+        seen_extractors.add(key)
+        extractors.append(
+            (
+                tar_exe,
+                [tar_exe, "-xf", archive, "-C", destination],
+            )
+        )
 
     last_error = None
     for executable, args in extractors:
