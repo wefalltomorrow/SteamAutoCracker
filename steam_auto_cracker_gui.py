@@ -34,8 +34,21 @@ try: # Handles Python errors to write them to a log file so they can be reported
     import subprocess
     from sac_lib.get_file_version import GetFileVersion
     from sac_lib.steam_store import (
+        SteamStoreClient,
+        SteamStoreError,
         describe_appdetails_problem,
         extract_appdetails_entry,
+    )
+    from sac_lib.steam_install import (
+        find_installed_games,
+        validate_game_folder,
+    )
+    from sac_lib.background import run_background
+    from sac_lib.tool_updater import (
+        get_cached_gbe_dll,
+        get_cached_steamless_executable,
+        update_gbe_fork,
+        update_steamless,
     )
     from sac_lib.restore import (
         discover_legacy_backups,
@@ -53,7 +66,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
     from difflib import SequenceMatcher
     import typing
 
-    VERSION = "2.3.1-wft.1"
+    VERSION = "2.4.0-wft.1"
 
     RETRY_DELAY = 15 # Delay in seconds before retrying a failed request. (default, can be modified in config.ini)
     RETRY_MAX = 30 # Number of failed tries (includes the first try) after which SAC will stop trying and quit. (default, can be modified in config.ini)
@@ -96,6 +109,11 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     def get_user_path(filename):
         return os.path.join(get_app_dir(), filename)
+
+    def get_tool_cache_dir():
+        path = os.path.join(get_app_dir(), "tool_cache")
+        os.makedirs(path, exist_ok=True)
+        return path
 
     def version_key(value):
         parts = [int(part) for part in re.findall(r"\d+", str(value or ""))]
