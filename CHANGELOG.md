@@ -13,6 +13,7 @@
 - Verified optional Steamless-KR updater with safe ZIP extraction and persistent full release cache.
 - In-place modern Steamless execution with captured exit code/stdout/stderr instead of temporarily moving game executables.
 - Diagnostics/maintenance CLI for installed games, folder validation, Steam metadata, safe restores, and external tool updates.
+- Non-destructive crack-only ZIP generation, replacing the old broken third crack approach.
 - CI coverage for Steam VDF/appmanifest parsing, nested DLL validation, updater path traversal protection, cached tool resolution, and CLI startup.
 
 ### Changed
