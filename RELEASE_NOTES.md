@@ -1,36 +1,47 @@
-# SteamAutoCracker v2.3.0-wft.1
+# SteamAutoCracker v2.3.1-wft.1
 
-> **Hotfix rebuild (2026-10-01):** fixes the compiled EXE exiting at startup with `AttributeError: module 'ttkbootstrap' has no attribute 'BOTH'`. The release builder now injects the missing classic Tk constants before the GUI starts, covering `BOTH`, `LEFT`, `RIGHT`, `Y`, `END`, `NORMAL`, and `DISABLED`.
-
-First maintained release of the wefalltomorrow best-of fork, based on upstream 2.2.2.
+Maintenance release focused on reliable recovery, preservation of originals, and truthful run results.
 
 ## Highlights
 
-- Fixes the all-games `KeyError` failure reported in upstream issue #124.
-- Replaces the obsolete local Steam app list with live Steam Store title search.
-- Adds Light, Dark and Black themes.
-- Adds a resizable GUI and expandable/scrollable logs.
-- Replaces `pywin32` version detection with portable `pefile` parsing.
-- Improves HTTP retry handling and PyInstaller/resource paths.
-- Prevents the upstream autoupdater from silently overwriting this fork.
-- Adds Python 3.10/3.13 CI plus an issue #124 regression test.
-- Adds a reproducible one-file Windows PyInstaller build.
+- Adds a **Restore original files** button that works without needing to repeat the Steam metadata lookup.
+- Saves a restore manifest whenever this release backs up or creates files.
+- Never destroys the current modified file during restore; it is preserved with a `.sac-replaced` suffix first.
+- Detects common backup pairs from older builds so existing folders can be recovered even when no manifest exists.
+- Refuses to overwrite a known-good backup or perform another modification pass while restore data is present.
+- Removes the misleading unconditional “success” result.
+- Shows a detailed operation summary and reports **Completed with warnings — launch not verified** when an executable stage does not complete.
+- Keeps the v2.3.0 fixes for Steam AppDetails issue #124, live Steam Store lookup, themes, portable PE parsing, PyInstaller paths, and fork-safe update checks.
+- Keeps the compiled startup fix for missing ttkbootstrap/Tk constants, and now also applies that compatibility directly to source runs.
 
-## Issue #124
+## Restore safety
 
-Steam can return valid JSON from AppDetails without the requested dynamic AppID key. Upstream indexed that key directly and crashed with `KeyError`.
+For manifest-backed changes, the release records both:
 
-This release validates the response, retries once without `filters=basic`, handles incomplete responses cleanly, and applies the same defensive path to DLC-name lookups.
+- files whose originals were moved to backups; and
+- files newly created by the application.
 
-## Included community work
+When restoring a replaced file, the active modified copy is renamed to a unique `.sac-replaced` sidecar before the known-good backup is moved back into place.
 
-Useful fixes and ideas were selectively integrated from the Sir-Kam, codingforfun5435 and sign-river forks and from upstream pull requests. Divergent or experimental changes were reviewed but not blindly merged.
+For folders changed by older releases that have no manifest, legacy restore mode only uses confidently matched backup pairs. It deliberately does not delete other files based on guesses.
 
-See `CHANGELOG.md` for the full release breakdown.
+## Verification
+
+The release CI checks:
+
+- Python 3.10 and 3.13 source compilation;
+- GUI/theme dependency imports;
+- ttkbootstrap compatibility constants;
+- PE version parsing;
+- Steam AppDetails issue #124 regression;
+- restore-manifest round trip;
+- preservation of modified files during restore;
+- path-traversal rejection; and
+- absence of the old unconditional success message.
 
 ## Downloads
 
-- `Steam.Auto.Cracker.GUI.v2.3.0-wft.1.zip` — compiled 64-bit Windows release.
-- `Steam.Auto.Cracker.GUI.v2.3.0-wft.1.zip.sha256` — SHA-256 checksum.
+- `Steam.Auto.Cracker.GUI.v2.3.1-wft.1.zip` — compiled 64-bit Windows release.
+- `Steam.Auto.Cracker.GUI.v2.3.1-wft.1.zip.sha256` — SHA-256 checksum.
 
-The release executable is built by GitHub Actions from the tagged repository source.
+The Windows release is built from the tagged `main` source by GitHub Actions.
