@@ -21,6 +21,7 @@ v2.4.0-wft.1 folds the strongest maintainable ideas from [SteamAutoCracks/Steam-
 - **Maintained Steamless-KR support** — Settings can download the latest `K0oRui/Steamless-KR` Windows release with the same verification and safe extraction. Cached modern Steamless builds run against the original EXE path in-place and report the real CLI exit code. Steamless-KR currently requires the .NET 9 runtime; if the modern tool cannot run or cannot unpack a target, SAC falls back to its bundled compatibility build.
 - **Persistent tool cache** beside SAC; optional external tool updates never overwrite the bundled fallback files.
 - **Maintenance CLI** (`steam_auto_cracker_cli.exe` in compiled releases) for installed-game listing, folder validation, metadata diagnostics, safe restore inspection/execution, and verified tool updates.
+- **Fixed crack-only mode** — the previously broken third crack approach now creates a non-destructive ZIP beside SAC, preserving each detected Steam API directory layout and applying the same AppID/DLC/config substitutions without touching the selected game.
 - **Existing v2.3.1 restore safety remains intact**: per-folder restore manifests, path-traversal protection, backup overwrite prevention, `.sac-replaced` preservation, and truthful completion summaries.
 
 This release deliberately does **not** import Harry's upload/debrid/1fichier sharing stack, hard-coded crack-file size heuristics, or other unrelated features. The goal is a smaller, auditable SteamAutoCracker rather than combining every line of every project.
