@@ -87,10 +87,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
     GITHUB_RAWHOST = "raw.githubusercontent.com"
     GITHUB_APIHOST = "api.github.com"
     GITHUB_ACCREPOSTR = "BigBoiCJ/SteamAutoCracker"
-    GITHUB_ALLRELEASESJSON = f"https://{GITHUB_APIHOST}/repos/{GITHUB_ACCREPOSTR}/releases"
-    GITHUB_LATESTRELEASESJSON = f"{GITHUB_ALLRELEASESJSON}/latest"
-    GITHUB_LATESTVERSIONJSON = f"https://{GITHUB_RAWHOST}/{GITHUB_ACCREPOSTR}/autoupdater/latestversion.json"
-    GITHUB_AUTOUPDATER = f"https://{GITHUB_RAWHOST}/{GITHUB_ACCREPOSTR}/autoupdater/steam_auto_cracker_gui_autoupdater.exe"
+    FORK_REPO = "wefalltomorrow/SteamAutoCracker"
+    FORK_LATESTRELEASEJSON = f"https://{GITHUB_APIHOST}/repos/{FORK_REPO}/releases/latest"
 
     def get_app_dir():
         """Directory for writable user files such as config and logs."""
@@ -113,7 +111,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
 
     def version_key(value):
         parts = [int(part) for part in re.findall(r"\d+", str(value or ""))]
-        return tuple((parts + [0, 0, 0])[:3])
+        return tuple(parts or [0])
 
     def OnTkinterError(exc, val, tb):
         # Handle Tkinter Python errors
@@ -1472,29 +1470,31 @@ try: # Handles Python errors to write them to a log file so they can be reported
     # ---------------------------------------
 
     def CheckUpdates():
-        updatesButton.config(text="Searching for updates...", state=tk.DISABLED)
+        updatesButton.config(text="Searching for fork updates...", state=tk.DISABLED)
         root.update()
 
         try:
-            req = SACRequest(GITHUB_LATESTVERSIONJSON, "RetrieveLatestVersionJson").req
+            req = SACRequest(FORK_LATESTRELEASEJSON, "RetrieveForkLatestRelease").req
             data = req.json()
-            latest = data["version"]
+            latest = str(data["tag_name"]).lstrip("vV")
         except Exception as exc:
             updatesButton.config(text="Update check failed", state=tk.NORMAL)
-            update_logs(f"\n[!] Update check failed: {exc}")
+            update_logs(f"\n[!] Fork update check failed: {exc}")
             return
 
         global latestversion
         global release_link
         latestversion = latest
-        release_link = data.get("release", "https://github.com/BigBoiCJ/SteamAutoCracker/releases")
-        release_link = release_link.replace("[VERSION]", latestversion)
+        release_link = data.get(
+            "html_url",
+            f"https://github.com/{FORK_REPO}/releases/latest",
+        )
 
         if version_key(latestversion) <= version_key(VERSION):
             updatesButton.config(text="SAC fork is up to date!", state=tk.NORMAL)
             return
 
-        updatesButton.config(text="New upstream release available", state=tk.NORMAL)
+        updatesButton.config(text="New fork release available", state=tk.NORMAL)
         DisplayUpdate()
 
     def DisplayUpdate():
@@ -1504,7 +1504,7 @@ try: # Handles Python errors to write them to a log file so they can be reported
         biggerFont = DEFAULT_FONT.copy()
         biggerFont.config(size=10)
         ttk.Label(top, text= "Update", font=FONT2).pack(padx=200, pady=(10,10), anchor="center")
-        ttk.Label(top, text="A newer upstream SteamAutoCracker release is available.\nYou can open its release page without replacing this fork automatically.", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
+        ttk.Label(top, text="A newer wefalltomorrow SteamAutoCracker release is available.\nOpen the release page to review and download it.", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(10,0), anchor="w")
         ttk.Label(top, text=f"Current version: {VERSION}", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(15,0), anchor="w")
         ttk.Label(top, text=f"Latest version: {latestversion}", font=biggerFont, padding=0).pack(padx=(6, 0), pady=(0,10), anchor="w")
 
@@ -1534,8 +1534,8 @@ try: # Handles Python errors to write them to a log file so they can be reported
     def UpdateSAC():
         updateDisplayStatusLabel.pack(pady=(0,20), anchor="center")
         updateDisplayStatusLabel.config(
-            text="Opening the upstream release page in your browser.\n"
-                 "Automatic replacement is disabled in this fork so fork-specific changes are preserved."
+            text="Opening the maintained fork release page in your browser.\n"
+                 "Downloads are manual so you can review the release before replacing your current build."
         )
         root.update()
         webbrowser.open(release_link)
