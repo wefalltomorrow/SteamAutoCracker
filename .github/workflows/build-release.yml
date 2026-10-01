@@ -67,6 +67,37 @@ jobs:
             throw "PyInstaller did not produce dist\steam_auto_cracker_gui.exe"
           }
 
+      - name: Smoke test compiled GUI startup
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "dist\steam_auto_cracker_gui.exe"
+          $workingDir = Split-Path $exe
+
+          $process = Start-Process -FilePath $exe -WorkingDirectory $workingDir -PassThru
+          Start-Sleep -Seconds 5
+
+          if ($process.HasExited) {
+            Write-Host "Compiled GUI exited during startup smoke test with code $($process.ExitCode)."
+
+            $errorLog = Join-Path $workingDir "error.log"
+            $tkErrorLog = Join-Path $workingDir "error_tkinter.log"
+
+            if (Test-Path $errorLog) {
+              Write-Host "---- error.log ----"
+              Get-Content $errorLog
+            }
+            if (Test-Path $tkErrorLog) {
+              Write-Host "---- error_tkinter.log ----"
+              Get-Content $tkErrorLog
+            }
+
+            throw "Compiled GUI failed the startup smoke test."
+          }
+
+          Stop-Process -Id $process.Id -Force
+          Wait-Process -Id $process.Id -ErrorAction SilentlyContinue
+          Write-Host "Compiled GUI stayed alive through the startup smoke test."
+
       - name: Package release archive
         shell: pwsh
         run: |
