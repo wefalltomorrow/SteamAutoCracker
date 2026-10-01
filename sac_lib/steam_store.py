@@ -42,7 +42,7 @@ import requests
 
 
 DEFAULT_HEADERS = {
-    "User-Agent": "SteamAutoCracker-best-of-all",
+    "User-Agent": "SteamAutoCracker-wefalltomorrow",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
 }
