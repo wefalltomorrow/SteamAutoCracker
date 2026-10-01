@@ -1,48 +1,47 @@
-# SteamAutoCracker v2.3.1-wft.1
+# SteamAutoCracker v2.4.0-wft.1
 
-Maintenance release focused on reliable recovery, preservation of originals, and truthful run results.
+Best-of-all maintenance release combining the strongest maintainable ideas from SteamAutoCracks/Steam-auto-crack and harryeffinpotter/Steam-Autocracker-GUI with the safer wefalltomorrow v2.3.x base.
 
 ## Highlights
 
-- Adds a **Restore original files** button that works without needing to repeat the Steam metadata lookup.
-- Saves a restore manifest whenever this release backs up or creates files.
-- Never destroys the current modified file during restore; it is preserved with a `.sac-replaced` suffix first.
-- Detects common backup pairs from older builds so existing folders can be recovered even when no manifest exists.
-- Refuses to overwrite a known-good backup or perform another modification pass while restore data is present.
-- Removes the misleading unconditional “success” result.
-- Shows a detailed operation summary and reports **Completed with warnings — launch not verified** when an executable stage does not complete.
-- Keeps the v2.3.0 fixes for Steam AppDetails issue #124, live Steam Store lookup, themes, portable PE parsing, PyInstaller paths, and fork-safe update checks.
-- Keeps the compiled startup fix for missing ttkbootstrap/Tk constants, and now also applies that compatibility directly to source runs.
+- Browse detected installed Steam games instead of manually finding every folder/AppID.
+- Steam library discovery reads the normal Steam registry/default paths, `libraryfolders.vdf`, and `appmanifest_*.acf` files.
+- Selecting a normal Steam install folder can auto-fill its AppID/build metadata.
+- Recursive Steam API DLL validation catches nested game layouts and drive-root selection is rejected.
+- Steam Store metadata work runs in a background worker rather than blocking Tk.
+- Optional GBE_FORK updates are downloaded from the official release, verified against reported asset size/SHA-256, safely extracted, and cached beside SAC.
+- Optional Steamless-KR updates use the same verified flow. Modern cached Steamless runs in-place and SAC records the actual CLI exit result.
+- Compiled releases include a new `steam_auto_cracker_cli.exe` diagnostics/maintenance utility.
+- Existing restore safety remains: manifests, traversal protection, no backup overwrite, preserved modified files, and truthful operation summaries.
 
-## Restore safety
+## Maintenance CLI
 
-For manifest-backed changes, the release records both:
+`steam_auto_cracker_cli.exe` supports:
 
-- files whose originals were moved to backups; and
-- files newly created by the application.
+- `list-installed`
+- `validate <path>`
+- `metadata <appid-or-title>`
+- `restore <path>` (dry-run by default; `--yes` performs it)
+- `update-gbe`
+- `update-steamless`
 
-When restoring a replaced file, the active modified copy is renamed to a unique `.sac-replaced` sidecar before the known-good backup is moved back into place.
+## External tool updates
 
-For folders changed by older releases that have no manifest, legacy restore mode only uses confidently matched backup pairs. It deliberately does not delete other files based on guesses.
+External updates are manual and optional. SAC retains bundled fallbacks. Updated tools are stored in a persistent `tool_cache` folder next to the executable and do not overwrite original game files merely by being downloaded.
+
+The updater verifies GitHub's asset size and SHA-256 digest when provided and rejects archive path traversal before extraction.
+
+## What was intentionally not merged
+
+This release does not import the unrelated upload/debrid/1fichier sharing subsystem, browser automation dependencies, or hard-coded emulator-DLL-size heuristics from other projects. The focus is core SteamAutoCracker reliability, maintainability and useful game-management improvements.
 
 ## Verification
 
-The release CI checks:
-
-- Python 3.10 and 3.13 source compilation;
-- GUI/theme dependency imports;
-- ttkbootstrap compatibility constants;
-- PE version parsing;
-- Steam AppDetails issue #124 regression;
-- restore-manifest round trip;
-- preservation of modified files during restore;
-- path-traversal rejection; and
-- absence of the old unconditional success message.
-- compiled Windows GUI startup smoke test before publishing the release asset.
+CI verifies Python 3.10 and 3.13, source compilation, GUI/theme imports, restore safety, issue #124 parsing, Steam library discovery, nested API validation, updater extraction safety, CLI startup, PE parsing, and compiled Windows GUI startup before publication.
 
 ## Downloads
 
-- `Steam.Auto.Cracker.GUI.v2.3.1-wft.1.zip` — compiled 64-bit Windows release.
-- `Steam.Auto.Cracker.GUI.v2.3.1-wft.1.zip.sha256` — SHA-256 checksum.
+- `Steam.Auto.Cracker.GUI.v2.4.0-wft.1.zip` — Windows release containing GUI and maintenance CLI.
+- `Steam.Auto.Cracker.GUI.v2.4.0-wft.1.zip.sha256` — SHA-256 checksum.
 
-The Windows release is built from the tagged `main` source by GitHub Actions.
+Built by GitHub Actions from the tagged `main` source.
